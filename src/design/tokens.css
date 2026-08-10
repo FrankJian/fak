@@ -1,0 +1,306 @@
+/* SPEC §6.3 颜色 token · §6.4 排印 · §6.5 尺寸 · §6.8 动效
+   颜色只在本文件出现，组件里禁止写死色值（AGENTS.md §5.3）。
+
+   主题共四档（SPEC §6.11）：跟随系统 / 浅色 / 深色 / 高对比度。
+   「跟随系统」在 lib/theme.ts 里被解析成后三档之一再落到 data-theme 上，
+   所以这里只需要三组定义；:root 同时充当浅色档与兜底值。 */
+
+:root {
+  /* ── 中性阶 · 浅色（微暖纸白，SPEC §6.3.2） */
+  --bg-base: #fafaf8;
+  --bg-surface: #f3f3f0;
+  --bg-inset: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-hover: #edede9;
+  --bg-active: #e4e4df;
+
+  --border-subtle: #eaeae6;
+  --border-default: #deded9;
+  --border-strong: #c2c2bb;
+
+  --text-primary: #1a1c1e;
+  --text-secondary: #5a6066;
+  --text-tertiary: #878d93;
+  --text-disabled: #a8adb2;
+
+  /* ── 强调色（黄铜，SPEC §6.3.3） */
+  --accent: #8a6d33;
+  --accent-muted: rgba(138, 109, 51, 0.13);
+  --accent-border: rgba(138, 109, 51, 0.38);
+
+  /* ── 语义色（SPEC §6.3.4） */
+  --success: #4a7a4a;
+  --warning: #8a6a2e;
+  --danger: #9a4b44;
+  --info: #62696f;
+
+  --diff-insert-bg: rgba(74, 122, 74, 0.14);
+  --diff-delete-bg: rgba(154, 75, 68, 0.14);
+  --diff-modify-bg: rgba(138, 106, 46, 0.14);
+  /* 行内真正变化的片段，叠在整行淡底色之上（SPEC F5.4：alpha 0.30）。
+     层次是「淡底＝这行变了」「深底＝这里变了」 */
+  --diff-inline-bg: rgba(138, 106, 46, 0.3);
+
+  --selection-bg: rgba(120, 130, 140, 0.2);
+  --current-line-bg: rgba(0, 0, 0, 0.022);
+
+  /* 差异行号槽的 3 px 实色色条（SPEC §6.3.4）：底色是 alpha，色条是实色 */
+  --diff-insert-gutter: #4a7a4a;
+  --diff-delete-gutter: #9a4b44;
+  --diff-modify-gutter: #8a6a2e;
+
+  /* 查找命中的三种底色（SPEC §6.3.4） */
+  --match-current-bg: var(--accent-muted);
+  --match-other-bg: rgba(138, 109, 51, 0.1);
+  --match-refine-bg: rgba(98, 105, 111, 0.18);
+
+  /* 过滤规则的六档配色（SPEC F4.7）。规则靠颜色 + 顺序区分，
+     所以它们之间要能互相分辨，而不只是与背景分辨 */
+  --filter-rule-1: #8a6d33;
+  --filter-rule-2: #3f6b52;
+  --filter-rule-3: #9a4b44;
+  --filter-rule-4: #4a6b8a;
+  --filter-rule-5: #7a4f8a;
+  --filter-rule-6: #62696f;
+
+  /* ── 编辑器语法配色（SPEC §6.3.5）：最多 5 个色相，注释对比度最低，
+        普通标识符不着色（= --text-primary）。 */
+  --syntax-keyword: #7a4f8a;
+  --syntax-string: #3f6b52;
+  --syntax-number: #8a5a33;
+  --syntax-comment: #878d93;
+  --syntax-type: #3a5f80;
+  --bracket-level-1: var(--syntax-type);
+  --bracket-level-2: var(--syntax-string);
+  --bracket-level-3: var(--syntax-number);
+  --bracket-level-4: var(--syntax-keyword);
+
+  --shadow-popover:
+    0 6px 18px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.18);
+  --scrim: rgba(0, 0, 0, 0.42);
+
+  --scrollbar-thumb: rgba(90, 96, 102, 0.26);
+  --scrollbar-thumb-hover: rgba(90, 96, 102, 0.4);
+  --scrollbar-track: rgba(90, 96, 102, 0.06);
+
+  /* ── 字体（SPEC §6.4） */
+  --font-ui:
+    ui-sans-serif, -apple-system, "Segoe UI Variable Text", "Segoe UI", Inter,
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono:
+    "JetBrains Mono", "SF Mono", "Cascadia Mono", Consolas, ui-monospace,
+    "Sarasa Mono SC", monospace;
+
+  /* ── 密度（SPEC §6.4，标准档） */
+  --density: 1;
+  --font-size-ui: calc(13px * var(--density));
+  --font-size-small: calc(11px * var(--density));
+  --font-size-tiny: calc(10px * var(--density));
+  --line-height-ui: calc(20px * var(--density));
+  /* 编辑区字号是独立的设置项（SPEC §6.4 表：默认 14，范围 8–72），
+     **不随界面密度缩放**——§6.4 明确编辑器缩放只动编辑区。P1-15 配置落地后由它驱动。 */
+  --font-size-editor: 14px;
+
+  /* SPEC §6.4：字重上限 600，禁止 700 */
+  --weight-normal: 400;
+  --weight-medium: 550;
+  --weight-strong: 600;
+
+  /* SPEC §6.5 间距阶：基准 4 px，只允许这 7 个值 */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --space-7: 24px;
+
+  --h-titlebar: calc(36px * var(--density));
+  /* SPEC §6.5 的高度表里没有独立的标签栏，因为 §7.2 把标签放在 36 px 的标题栏内。
+     当前外壳还是「标题栏 + 标签栏」两行（P1-08 未完成），这个 token 是过渡值；
+     等标签并进标题栏时它应当被删掉而不是改数值。 */
+  --h-tabbar: calc(30px * var(--density));
+  --h-toolbar: calc(34px * var(--density));
+  --h-md-toolbar: calc(32px * var(--density));
+  --h-statusbar: calc(24px * var(--density));
+  --h-row: calc(24px * var(--density));
+  --h-input: calc(28px * var(--density));
+  --h-button: calc(28px * var(--density));
+  --pad-button-x: var(--space-4);
+  /* 图标按钮热区不随密度缩到 26 px 以下：SPEC §6.6.3 把 26×26 定为可点击性底线，
+     它优先于 §6.4 的密度缩放。 */
+  --h-icon-button: max(26px, calc(26px * var(--density)));
+
+  /* 开关本体（SPEC 未定尺寸，按 §6.10 的密度取向定在这里，组件不写死数值） */
+  --switch-w: calc(26px * var(--density));
+  --switch-h: calc(14px * var(--density));
+
+  /* 小地图只画标记与行长条、不渲染文本，因此比 VS Code 的窄得多（SPEC §181） */
+  --w-minimap: calc(64px * var(--density));
+  --switch-knob: calc(10px * var(--density));
+
+  --radius-badge: 2px;
+  --radius-control: 4px;
+  --radius-panel: 6px;
+  --radius-modal: 8px;
+
+  --duration-fast: 100ms;
+  --duration-popover: 140ms;
+  --duration-panel: 180ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  --focus-ring-width: 1px;
+}
+
+:root[data-density="compact"] {
+  --density: 0.92;
+}
+:root[data-density="standard"] {
+  --density: 1;
+}
+:root[data-density="comfortable"] {
+  --density: 1.1;
+}
+
+:root[data-theme="dark"] {
+  --bg-base: #131517;
+  --bg-surface: #17191c;
+  --bg-inset: #0e1012;
+  --bg-raised: #1d2023;
+  --bg-hover: #202427;
+  --bg-active: #262a2e;
+
+  --border-subtle: #202326;
+  --border-default: #2a2e32;
+  --border-strong: #3a3f45;
+
+  --text-primary: #e6e8ea;
+  --text-secondary: #9ca3a9;
+  --text-tertiary: #6c737a;
+  --text-disabled: #4a5056;
+
+  --accent: #c4a265;
+  --accent-muted: rgba(196, 162, 101, 0.16);
+  --accent-border: rgba(196, 162, 101, 0.42);
+
+  --success: #6f9a6f;
+  --warning: #b08a4a;
+  --danger: #b5615a;
+  --info: #7e888f;
+
+  --diff-insert-bg: rgba(111, 154, 111, 0.14);
+  --diff-delete-bg: rgba(181, 97, 90, 0.14);
+  --diff-modify-bg: rgba(176, 138, 74, 0.14);
+  --diff-inline-bg: rgba(176, 138, 74, 0.3);
+
+  --selection-bg: rgba(150, 160, 170, 0.22);
+  --current-line-bg: rgba(255, 255, 255, 0.028);
+
+  --diff-insert-gutter: #6f9a6f;
+  --diff-delete-gutter: #b5615a;
+  --diff-modify-gutter: #b08a4a;
+
+  --match-current-bg: var(--accent-muted);
+  --match-other-bg: rgba(196, 162, 101, 0.1);
+  --match-refine-bg: rgba(126, 136, 143, 0.18);
+
+  --filter-rule-1: #c4a265;
+  --filter-rule-2: #8ab48f;
+  --filter-rule-3: #b5615a;
+  --filter-rule-4: #7ea3c4;
+  --filter-rule-5: #b18ac4;
+  --filter-rule-6: #7e888f;
+
+  --syntax-keyword: #b18ac4;
+  --syntax-string: #8ab48f;
+  --syntax-number: #c9a26b;
+  --syntax-comment: #6c737a;
+  --syntax-type: #7fa8cc;
+  --bracket-level-1: var(--syntax-type);
+  --bracket-level-2: var(--syntax-string);
+  --bracket-level-3: var(--syntax-number);
+  --bracket-level-4: var(--syntax-keyword);
+
+  --shadow-popover:
+    0 6px 20px rgba(0, 0, 0, 0.34), 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.44);
+  --scrim: rgba(0, 0, 0, 0.56);
+
+  --scrollbar-thumb: rgba(156, 163, 169, 0.28);
+  --scrollbar-thumb-hover: rgba(156, 163, 169, 0.42);
+  --scrollbar-track: rgba(156, 163, 169, 0.06);
+}
+
+/* 高对比度：层次靠边框而非背景明度差（SPEC §6.11） */
+:root[data-theme="highContrast"] {
+  --bg-base: #000000;
+  --bg-surface: #000000;
+  --bg-inset: #000000;
+  --bg-raised: #000000;
+  --bg-hover: #1a1a1a;
+  --bg-active: #2b2b2b;
+
+  --border-subtle: #8b9199;
+  --border-default: #a8aeb5;
+  --border-strong: #ffffff;
+
+  --text-primary: #ffffff;
+  --text-secondary: #f0f0f0;
+  --text-tertiary: #d4d4d4;
+  --text-disabled: #9a9a9a;
+
+  --accent: #e8c77a;
+  --accent-muted: #3a3020;
+  --accent-border: #e8c77a;
+
+  --success: #7ede7e;
+  --warning: #ffd479;
+  --danger: #ff8a80;
+  --info: #cfd6dc;
+
+  --diff-insert-bg: #10300f;
+  --diff-delete-bg: #340f0c;
+  --diff-modify-bg: #33270c;
+  --diff-inline-bg: #6b5115;
+
+  --selection-bg: #3d4650;
+  --current-line-bg: #141414;
+
+  --diff-insert-gutter: #7ede7e;
+  --diff-delete-gutter: #ff8a80;
+  --diff-modify-gutter: #ffd479;
+
+  --match-current-bg: #4a3c14;
+  --match-other-bg: #2e2712;
+  --match-refine-bg: #24303a;
+
+  --filter-rule-1: #ffd479;
+  --filter-rule-2: #a8e6b0;
+  --filter-rule-3: #ff8a80;
+  --filter-rule-4: #8fd4ff;
+  --filter-rule-5: #e0b8f5;
+  --filter-rule-6: #d0d0d0;
+
+  --syntax-keyword: #e0b8f5;
+  --syntax-string: #a8e6b0;
+  --syntax-number: #ffd479;
+  --syntax-comment: #cfd6dc;
+  --syntax-type: #a9d4ff;
+  --bracket-level-1: var(--syntax-type);
+  --bracket-level-2: var(--syntax-string);
+  --bracket-level-3: var(--syntax-number);
+  --bracket-level-4: var(--syntax-keyword);
+
+  /* 纯黑底上浅色主题的淡阴影等于不存在；高对比档的「脱离感」改由边框承担，
+     阴影只保留一层可辨识的深色（SPEC §6.11）。 */
+  --shadow-popover: 0 6px 20px rgba(0, 0, 0, 0.9);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.9);
+  --scrim: #000000;
+
+  --scrollbar-thumb: #a8aeb5;
+  --scrollbar-thumb-hover: #ffffff;
+  --scrollbar-track: #1a1a1a;
+
+  --focus-ring-width: 2px;
+}

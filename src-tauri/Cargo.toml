@@ -1,0 +1,115 @@
+[package]
+name = "fak"
+version = "0.1.0"
+description = "Fak text and code editor"
+authors = ["Fak contributors"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "fak_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-os = "2"
+tauri-plugin-process = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-log = "2"
+ropey = "1.6.1"
+memmap2 = "0.9.11"
+dashmap = "6.2.1"
+tokio = { version = "1.53.1", features = ["full"] }
+tokio-util = { version = "0.7.19", features = ["rt"] }
+encoding_rs = "0.8.35"
+chardetng = "1.0.0"
+similar = { version = "3.1.2", features = ["unicode"] }
+ignore = "0.4.33"
+rayon = "1.12.0"
+globset = "0.4.20"
+notify = "8.2.0"
+notify-debouncer-full = "0.7.0"
+thiserror = "2.0.19"
+tempfile = "3.27.0"
+uuid = { version = "1.24.0", features = ["v4"] }
+tree-sitter = "0.26.11"
+tree-sitter-highlight = "0.26.11"
+memchr = "2.8.3"
+tree-sitter-typescript = "0.23.2"
+log = "0.4.33"
+tree-sitter-javascript = "0.25.0"
+streaming-iterator = "0.1.9"
+fs4 = "1.1.0"
+regex = "1.13.1"
+tree-sitter-json = "0.24.8"
+tree-sitter-python = "0.25.0"
+tree-sitter-rust = "0.24.2"
+tree-sitter-md = "0.5.3"
+pinyin = { version = "0.11.0", default-features = false, features = ["plain"] }
+base64 = { version = "0.23.1", default-features = false, features = ["std"] }
+pulldown-cmark = "0.13.4"
+trash = "5.2.6"
+tree-sitter-go = "0.25.0"
+tree-sitter-java = "0.23.5"
+tree-sitter-c = "0.24.2"
+tree-sitter-cpp = "0.23.4"
+tree-sitter-c-sharp = "0.23.5"
+tree-sitter-php = "0.24.2"
+tree-sitter-kotlin-ng = "1.1.0"
+tree-sitter-swift = "0.7.3"
+tree-sitter-yaml = "0.7.2"
+tree-sitter-xml = "0.7.0"
+tree-sitter-toml-ng = "0.7.0"
+tree-sitter-ini = "1.4.0"
+toml_edit = "0.25.13"
+reqwest = { version = "0.13.4", features = ["socks"] }
+dirs = "6.0.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+panic = "abort"
+strip = true
+
+# bench profile 默认继承 release，会把 panic=abort 连同 LTO 一并带给依赖，
+# 与 criterion harness 需要的 unwind 冲突
+[profile.bench]
+lto = false
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.189"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_UI_Shell", "Win32_Foundation"] }
+winreg = "0.56.0"
+
+[dev-dependencies]
+criterion = "0.8.2"
+proptest = "1.11.0"
+
+# criterion 自带参数解析，必须关掉 libtest 的 harness
+[[bench]]
+name = "m0"
+harness = false
+
+[[bench]]
+name = "document"
+harness = false
+

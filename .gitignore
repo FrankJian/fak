@@ -1,0 +1,56 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.pid
+*.pid.lock
+
+# Local environment files may contain credentials. Keep examples versioned.
+.env
+.env.*
+!.env.example
+
+node_modules
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+coverage
+playwright-report
+test-results
+.vite
+
+# Local command output accidentally written into the Tauri directory
+src-tauri/2
+
+# Rust
+src-tauri/target
+src-tauri/target-check
+src-tauri/gen
+# dev server 会锁定主 target 目录，跑测试时用独立 target（必须在 src-tauri 之外，
+# 否则 tauri 的文件监视会把测试产物当成源码改动而反复重建）
+target-test
+target-check
+
+# 测试语料由 testdata/generate.mjs 生成，不入库（AGENTS.md §7.3）
+testdata/*.log
+testdata/*.json
+testdata/*.ts
+testdata/*.txt
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -1,0 +1,110 @@
+name: Release
+
+# 打 tag 触发。tag 必须形如 v<版本>，且与 src-tauri/Cargo.toml 的版本一致：
+#   git tag v1.2.3 && git push origin v1.2.3
+#
+# 需要在仓库 Settings → Secrets and variables → Actions 配置：
+#   TAURI_SIGNING_PRIVATE_KEY           更新包签名私钥（~/.tauri/fak.key 的内容）
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  私钥密码；本项目为空密码，配一个空值即可
+#
+# 这里的签名是 updater 的 minisign 签名，与代码签名（Authenticode / Apple 公证）无关。
+# 本项目不做代码签名，用户首次安装会看到 SmartScreen / Gatekeeper 警告。
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+# 同一个 tag 不并发跑；也不取消进行中的发布——中途取消会留下只含部分平台的草稿。
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # tag 与 Cargo.toml 版本不一致时直接失败，避免误发一个版本号对不上的包。
+  verify-version:
+    name: 校验 tag 与版本一致
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-version-single-source.mjs --tag "${GITHUB_REF_NAME}"
+
+  build:
+    name: 构建 ${{ matrix.name }}
+    needs: verify-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            # 只出 NSIS：latest.json 指向 setup.exe，不需要再产一份 MSI
+            bundles: nsis
+          - name: macOS Apple Silicon
+            os: macos-26
+            target: aarch64-apple-darwin
+            # 必须含 app：macOS 的更新产物是 .app.tar.gz，DMG 只用于首次安装
+            bundles: app,dmg
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/setup@v1
+        with:
+          runtime: node@22
+          cache: true
+          install: false
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Fak ${{ github.ref_name }}
+          releaseBody: |
+            Fak ${{ github.ref_name }}（Windows x64 / macOS Apple Silicon）。
+
+            安装包见下方 assets。已安装的版本可在「设置 → 关于 → 检查更新」内自动升级。
+
+            本应用未做代码签名：Windows 首次运行会被 SmartScreen 拦截，
+            点「更多信息 → 仍要运行」即可；macOS 需右键打开。
+          # 先发草稿，等矩阵各平台都上传完再由 publish 统一取消草稿。
+          # 否则更新器可能读到只含部分平台的 latest.json，其他平台会误判为「已是最新」。
+          releaseDraft: true
+          prerelease: false
+          # 生成并上传 latest.json；多平台矩阵会自动合并各自的签名条目。
+          # 地址与 tauri.conf.json 的 plugins.updater.endpoints 必须是同一个，
+          # 即 releases/latest/download/latest.json。
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+  publish:
+    name: 发布 Release
+    needs: build
+    runs-on: macos-26
+    steps:
+      # 取消草稿后 releases/latest/download/latest.json 才能被更新器解析到。
+      - name: 取消草稿状态
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"

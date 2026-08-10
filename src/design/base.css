@@ -1,0 +1,259 @@
+/* 全局基础样式。SPEC §6.7 交互状态 · §6.8 动效 · §6.9 滚动条 */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-ui);
+  line-height: var(--line-height-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 桌面应用：默认不可选中正文以外的界面文字，避免拖拽误选 */
+body {
+  user-select: none;
+  cursor: default;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+/* SPEC §6.7：禁用态只降透明度，不改颜色——改颜色会和语义色撞车 */
+button:disabled,
+input:disabled,
+select:disabled,
+[aria-disabled="true"] {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+::selection {
+  background: var(--selection-bg);
+}
+
+/* SPEC §6.9 滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 轨道底色只在容器 hover 时出现，静止时滚动条几乎隐形（SPEC §6.9） */
+*:hover::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 语法高亮（SPEC §6.3.5）。区间由 Rust 的 tree-sitter 产出（ADR-05），
+   这里只负责上色。**只有五个色相**，普通标识符、函数名、运算符、标点
+   一律不着色——不是没做完，是 §6.3.5 明确要求的克制。 */
+.cm-hl-keyword {
+  color: var(--syntax-keyword);
+}
+.cm-hl-string {
+  color: var(--syntax-string);
+}
+.cm-hl-number,
+.cm-hl-constant {
+  color: var(--syntax-number);
+}
+.cm-hl-comment {
+  color: var(--syntax-comment);
+}
+.cm-hl-type {
+  color: var(--syntax-type);
+}
+.cm-bracket-level-0 {
+  color: var(--bracket-level-1);
+}
+.cm-bracket-level-1 {
+  color: var(--bracket-level-2);
+}
+.cm-bracket-level-2 {
+  color: var(--bracket-level-3);
+}
+.cm-bracket-level-3 {
+  color: var(--bracket-level-4);
+}
+
+/* 查找命中（SPEC F4.4）。当前命中与其余命中必须一眼分得开，
+   否则按「下一个」时用户不知道光标跳到了哪一处。
+   只改底色不改字色：命中处的语法高亮仍要看得见。 */
+.cm-search-match {
+  background: var(--match-other-bg);
+}
+.cm-search-match-active {
+  background: var(--match-current-bg);
+  outline: 1px solid var(--accent-border);
+}
+
+/* 搜索耗时超过 300 ms 后才展示的 2 px 不确定进度条。 */
+.find-progress-indicator {
+  animation: find-progress var(--duration-panel) var(--ease-standard) infinite;
+}
+
+@keyframes find-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+/* Rust 预览 HTML 的排印基线（SPEC F8）。所有颜色来自 design token。 */
+.markdown-preview {
+  user-select: text;
+}
+
+.markdown-preview-content {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: var(--space-5);
+  line-height: 1.65;
+}
+
+.markdown-preview-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-preview-content h1,
+.markdown-preview-content h2,
+.markdown-preview-content h3,
+.markdown-preview-content h4,
+.markdown-preview-content h5,
+.markdown-preview-content h6 {
+  color: var(--text-primary);
+  line-height: 1.25;
+  margin: var(--space-5) 0 var(--space-2);
+}
+
+.markdown-preview-content p,
+.markdown-preview-content ul,
+.markdown-preview-content ol,
+.markdown-preview-content blockquote {
+  margin: 0 0 var(--space-3);
+}
+
+.markdown-preview-content a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.markdown-preview-content pre,
+.markdown-preview-content code {
+  font-family: var(--font-mono);
+}
+
+.markdown-preview-content pre {
+  overflow: auto;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+}
+
+.markdown-preview-content code {
+  background: var(--bg-inset);
+  border-radius: var(--radius-control);
+  padding: 0 var(--space-1);
+}
+
+.markdown-preview-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-preview-content blockquote {
+  border-left: 2px solid var(--border-default);
+  color: var(--text-secondary);
+  padding-left: var(--space-3);
+}
+
+.markdown-preview-content table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.markdown-preview-content th,
+.markdown-preview-content td {
+  border: 1px solid var(--border-default);
+  padding: var(--space-2);
+  text-align: left;
+}
+
+.markdown-preview-content img {
+  height: auto;
+  max-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}
