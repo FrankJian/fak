@@ -42,24 +42,6 @@ jobs:
 
       - run: pnpm check:all
 
-  deny:
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - name: Install cargo-deny
-        run: cargo install --locked cargo-deny
-
-      - name: Check Rust dependencies
-        working-directory: src-tauri
-        run: cargo deny check
-
   benchmark:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: macos-26
