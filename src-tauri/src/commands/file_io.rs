@@ -56,16 +56,24 @@ pub async fn open_file(
         });
     }
 
-    // 先以 mmap 建稀疏行索引，用真实行数与最长行决定档位。Tier C 的正文绝不
+    let sample_path = plan.path.clone();
+    let sample = tauri::async_runtime::spawn_blocking(move || read_detection_sample(&sample_path))
+        .await
+        .map_err(|_| AppError::Io { os_code: None })??;
+    let detection = crate::encoding::detect(&sample);
+
+    // 先建稀疏行索引，用真实行数与最长行决定档位。Tier C 的正文绝不
     // 进入 Rope；普通文档的临时索引会在下面立刻释放（SPEC §4.1 / ADR-02）。
     let document_id = uuid::Uuid::new_v4().to_string();
     let stream_id = document_id.clone();
     let stream_path = plan.path.clone();
     let stream_state = streams.inner().clone();
-    let stream_info =
-        tauri::async_runtime::spawn_blocking(move || stream_state.open(stream_id, &stream_path))
-            .await
-            .map_err(|_| AppError::Io { os_code: None })??;
+    let stream_encoding = detection.label;
+    let stream_info = tauri::async_runtime::spawn_blocking(move || {
+        stream_state.open(stream_id, &stream_path, stream_encoding)
+    })
+    .await
+    .map_err(|_| AppError::Io { os_code: None })??;
     let mode = DocumentMode::from_metrics(
         plan.size_bytes,
         stream_info.max_line_len,
@@ -73,13 +81,7 @@ pub async fn open_file(
     );
 
     if mode == DocumentMode::Stream {
-        let sample_path = plan.path.clone();
-        let sample =
-            tauri::async_runtime::spawn_blocking(move || read_detection_sample(&sample_path))
-                .await
-                .map_err(|_| AppError::Io { os_code: None })??;
-        let detection = crate::encoding::detect(&sample);
-        let text = String::from_utf8_lossy(&sample);
+        let text = crate::encoding::decode(&sample, detection.label).0;
         return Ok(DocumentMeta {
             document_id,
             file_name: crate::error::path_hint(&plan.path),
@@ -134,7 +136,7 @@ pub struct PromoteStreamArgs {
     pub document_id: String,
 }
 
-/// 用户确认后把 Tier C 的 mmap 视图载入 Rope，成为可编辑的 Tier B 文档（SPEC §4.1）。
+/// 用户确认后把 Tier C 的按需视图载入 Rope，成为可编辑的 Tier B 文档（SPEC §4.1）。
 ///
 /// 这是唯一允许从 Stream 降到 Lean 的路径：用户已经在 UI 中看到了内存估算并确认。
 #[tauri::command]
@@ -368,6 +370,21 @@ pub struct SaveArgs {
     pub overwrite: bool,
 }
 
+fn finish_save(
+    document: &mut Document,
+    path: PathBuf,
+    fingerprint: FileFingerprint,
+    read_only: bool,
+) -> DocumentMeta {
+    document.path = Some(path);
+    document.fingerprint = Some(fingerprint);
+    // 只读源文件另存到可写位置后，当前标签已经代表新文件，编辑能力也应随目标刷新。
+    document.read_only = read_only;
+    document.mark_saved();
+    document.undo.mark_saved();
+    DocumentMeta::of(document)
+}
+
 #[tauri::command]
 pub async fn save_document(
     args: SaveArgs,
@@ -395,18 +412,19 @@ pub async fn save_document(
     };
 
     let target = path.clone();
-    let outcome = tauri::async_runtime::spawn_blocking(move || {
-        save_atomic(&target, &bytes, expected, policy)
+    let (outcome, read_only) = tauri::async_runtime::spawn_blocking(move || {
+        let outcome = save_atomic(&target, &bytes, expected, policy)?;
+        let read_only = std::fs::metadata(&target)
+            .map_err(|error| AppError::from_io(&error, &target))?
+            .permissions()
+            .readonly();
+        Ok::<_, AppError>((outcome, read_only))
     })
     .await
     .map_err(|_| AppError::Io { os_code: None })??;
 
     with_document(&state, &args.document_id, |document| {
-        document.path = Some(path);
-        document.fingerprint = Some(outcome.fingerprint);
-        document.mark_saved();
-        document.undo.mark_saved();
-        Ok(DocumentMeta::of(document))
+        Ok(finish_save(document, path, outcome.fingerprint, read_only))
     })
 }
 
@@ -619,5 +637,23 @@ mod tests {
     #[test]
     fn unknown_encoding_name_is_rejected() {
         assert!(EncodingLabel::from_name("no-such-encoding").is_err());
+    }
+
+    #[test]
+    fn save_as_switches_a_read_only_document_to_the_writable_target() {
+        let mut document = Document::new("d1".into(), Some("old.txt".into()), "text");
+        document.read_only = true;
+
+        let meta = finish_save(
+            &mut document,
+            PathBuf::from("copy.txt"),
+            FileFingerprint::default(),
+            false,
+        );
+
+        assert_eq!(document.path, Some(PathBuf::from("copy.txt")));
+        assert_eq!(meta.file_name, "copy.txt");
+        assert!(!meta.read_only);
+        assert!(!meta.dirty);
     }
 }

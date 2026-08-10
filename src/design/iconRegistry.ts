@@ -103,7 +103,6 @@ import Minimize2 from "lucide-react/icons/minimize-2";
 import Minus from "lucide-react/icons/minus";
 import Monitor from "lucide-react/icons/monitor";
 import Moon from "lucide-react/icons/moon";
-import MousePointer2 from "lucide-react/icons/mouse-pointer-2";
 import Package from "lucide-react/icons/package";
 import Palette from "lucide-react/icons/palette";
 import PanelBottom from "lucide-react/icons/panel-bottom";
@@ -313,7 +312,6 @@ export const icons = {
   themeHighContrast: Contrast,
   language: Languages,
   shortcuts: Keyboard,
-  gesture: MousePointer2,
   import: ArrowDownToLine,
   export: ArrowUpFromLine,
   commandPalette: CommandIcon,

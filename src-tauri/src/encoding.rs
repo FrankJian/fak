@@ -212,15 +212,20 @@ pub fn decode(bytes: &[u8], label: EncodingLabel) -> (String, bool) {
 /// UTF-16 必须手写：encoding_rs 遵循 Encoding Standard「输出编码永不为 UTF-16」，
 /// 对 `UTF_16LE.encode()` 会**静默回落成 UTF-8**。直接用它会写出错误的文件。
 /// UTF-8 with BOM 同样要手工补 BOM，encoding_rs 的编码器不写 BOM。
-pub fn encode(text: &str, label: EncodingLabel) -> AppResult<Vec<u8>> {
+pub fn bom_bytes(label: EncodingLabel) -> &'static [u8] {
+    match label {
+        EncodingLabel::Utf8Bom => &[0xEF, 0xBB, 0xBF],
+        EncodingLabel::Utf16Le => &[0xFF, 0xFE],
+        EncodingLabel::Utf16Be => &[0xFE, 0xFF],
+        _ => &[],
+    }
+}
+
+/// 编码正文片段但不写 BOM。流式变换逐行调用，BOM 只能在文件开头写一次。
+pub fn encode_fragment(text: &str, label: EncodingLabel) -> AppResult<Vec<u8>> {
     if matches!(label, EncodingLabel::Utf16Le | EncodingLabel::Utf16Be) {
         let big_endian = label == EncodingLabel::Utf16Be;
-        let mut out = Vec::with_capacity(text.len() * 2 + 2);
-        out.extend_from_slice(if big_endian {
-            &[0xFE, 0xFF]
-        } else {
-            &[0xFF, 0xFE]
-        });
+        let mut out = Vec::with_capacity(text.len() * 2);
         for unit in text.encode_utf16() {
             if big_endian {
                 out.extend_from_slice(&unit.to_be_bytes());
@@ -237,11 +242,14 @@ pub fn encode(text: &str, label: EncodingLabel) -> AppResult<Vec<u8>> {
             label: label.name().to_string(),
         });
     }
-    let mut out = Vec::with_capacity(bytes.len() + 3);
-    if label == EncodingLabel::Utf8Bom {
-        out.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
-    }
-    out.extend_from_slice(&bytes);
+    Ok(bytes.into_owned())
+}
+
+pub fn encode(text: &str, label: EncodingLabel) -> AppResult<Vec<u8>> {
+    let fragment = encode_fragment(text, label)?;
+    let mut out = Vec::with_capacity(fragment.len() + bom_bytes(label).len());
+    out.extend_from_slice(bom_bytes(label));
+    out.extend_from_slice(&fragment);
     Ok(out)
 }
 

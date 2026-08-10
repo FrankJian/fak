@@ -39,6 +39,8 @@ export interface ActionContext {
   isDirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  /** 当前文件扩展名属于 SPEC F9.1 支持的格式化类型。 */
+  canFormatDocument: boolean;
   /** 编辑同步正在全量重放，以 Rust 为准的操作应置灰（SPEC P1-11） */
   isResyncing: boolean;
   /** Tier C 流式视图：没有 CodeMirror 正文可编辑 */

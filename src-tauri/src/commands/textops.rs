@@ -190,7 +190,6 @@ fn utf16_len(text: &str) -> usize {
 #[serde(rename_all = "camelCase")]
 pub struct FormatArgs {
     pub document_id: String,
-    pub selection: Option<Selection>,
     pub syntax: crate::format::FormatSyntax,
     pub minify: bool,
     pub indent_width: usize,
@@ -199,14 +198,15 @@ pub struct FormatArgs {
 
 /// 格式化 / 压缩（SPEC F9.1）。
 ///
-/// 与其它改正文的工具同构：只算最小编辑集，由前端当作一次编辑批次下发，
+/// 「格式化文档」始终处理全文；右键位置或当前选区不得改变作用范围。
+/// 只算最小编辑集，由前端当作一次编辑批次下发，
 /// 因此整次格式化是**单个撤销步骤**。非法语法**原样保留正文**并报出行列。
 #[tauri::command]
 pub fn plan_format(
     args: FormatArgs,
     state: tauri::State<'_, AppState>,
 ) -> AppResult<Vec<ReplaceEdit>> {
-    let region = read_region(&state, &args.document_id, args.selection, true)?;
+    let region = read_region(&state, &args.document_id, None, false)?;
     let updated = if args.minify {
         crate::format::minify(&region.text, args.syntax)?
     } else {

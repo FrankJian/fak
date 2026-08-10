@@ -22,7 +22,6 @@ export type SettingsGroup =
   | "shortcuts"
   | "findDiff"
   | "markdown"
-  | "gestures"
   | "updates"
   | "tools"
   | "dataSafety"
@@ -47,7 +46,6 @@ export const SETTINGS_GROUPS: ReadonlyArray<{
   },
   { id: "findDiff", labelKey: "settings.group.findDiff", icon: "find" },
   { id: "markdown", labelKey: "settings.group.markdown", icon: "preview" },
-  { id: "gestures", labelKey: "settings.group.gestures", icon: "gesture" },
   { id: "updates", labelKey: "settings.group.updates", icon: "update" },
   { id: "tools", labelKey: "settings.group.tools", icon: "externalTool" },
   { id: "dataSafety", labelKey: "settings.group.dataSafety", icon: "backup" },
@@ -347,9 +345,6 @@ export const SETTINGS: readonly SettingDescriptor[] = [
     { value: "assetFile", labelKey: "settings.pasteImageMode.assetFile" },
     { value: "inlineBase64", labelKey: "settings.pasteImageMode.inlineBase64" },
   ]),
-
-  // —— H 鼠标手势（绑定表在设置窗口里单独渲染，不是一个标量设置项）
-  toggle("gestures", "mouseGesturesEnabled"),
 
   // —— F 更新（代理输入框与「测试连接」在设置窗口里单独渲染，它要即时校验）
   toggle("updates", "autoCheckUpdates"),

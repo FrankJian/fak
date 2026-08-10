@@ -2,6 +2,7 @@
 
 use crate::error::AppResult;
 use crate::search::{compile, SearchOptions};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 pub const MAX_HIGHLIGHTS_PER_LINE: usize = 256;
@@ -35,21 +36,29 @@ pub struct FilteredLine {
     pub highlights: Vec<Highlight>,
 }
 
-pub fn apply(text: &str, rules: &[FilterRule]) -> AppResult<Vec<FilteredLine>> {
-    let compiled = rules
-        .iter()
-        .map(|rule| {
-            if rule.enabled && !rule.query.is_empty() {
-                compile(&rule.query, rule.options).map(Some)
-            } else {
-                Ok(None)
-            }
-        })
-        .collect::<AppResult<Vec<_>>>()?;
-    let mut lines = Vec::new();
-    for (line, raw) in text.lines().enumerate() {
-        let text = raw.strip_suffix('\r').unwrap_or(raw);
-        for (rule_index, regex) in compiled.iter().enumerate() {
+/// 编译后的规则可复用于流式扫描和导出，避免每行重复编译正则。
+pub struct FilterEngine {
+    rules: Vec<(bool, Option<Regex>)>,
+}
+
+impl FilterEngine {
+    pub fn new(rules: &[FilterRule]) -> AppResult<Self> {
+        let compiled = rules
+            .iter()
+            .map(|rule| {
+                let regex = if rule.enabled && !rule.query.is_empty() {
+                    Some(compile(&rule.query, rule.options)?)
+                } else {
+                    None
+                };
+                Ok((rule.exclude, regex))
+            })
+            .collect::<AppResult<Vec<_>>>()?;
+        Ok(Self { rules: compiled })
+    }
+
+    pub fn apply_line(&self, line: usize, text: &str) -> Option<FilteredLine> {
+        for (rule_index, (exclude, regex)) in self.rules.iter().enumerate() {
             let Some(regex) = regex else { continue };
             let highlights = regex
                 .find_iter(text)
@@ -59,19 +68,41 @@ pub fn apply(text: &str, rules: &[FilterRule]) -> AppResult<Vec<FilteredLine>> {
                     end: text[..found.end()].encode_utf16().count(),
                 })
                 .collect::<Vec<_>>();
-            if !highlights.is_empty() {
-                // 排除规则命中就丢掉这一行，不再看后面的规则
-                if rules[rule_index].exclude {
-                    break;
-                }
-                lines.push(FilteredLine {
-                    line,
-                    text: text.to_string(),
-                    rule_index,
-                    highlights,
-                });
-                break;
+            if highlights.is_empty() {
+                continue;
             }
+            if *exclude {
+                return None;
+            }
+            return Some(FilteredLine {
+                line,
+                text: text.to_string(),
+                rule_index,
+                highlights,
+            });
+        }
+        None
+    }
+}
+
+pub fn apply(text: &str, rules: &[FilterRule]) -> AppResult<Vec<FilteredLine>> {
+    apply_with_cancel(text, rules, || false)
+}
+
+pub fn apply_with_cancel(
+    text: &str,
+    rules: &[FilterRule],
+    mut should_cancel: impl FnMut() -> bool,
+) -> AppResult<Vec<FilteredLine>> {
+    let engine = FilterEngine::new(rules)?;
+    let mut lines = Vec::new();
+    for (line, raw) in text.lines().enumerate() {
+        if line.is_multiple_of(256) && should_cancel() {
+            return Err(crate::error::AppError::Cancelled);
+        }
+        let text = raw.strip_suffix('\r').unwrap_or(raw);
+        if let Some(row) = engine.apply_line(line, text) {
+            lines.push(row);
         }
     }
     Ok(lines)
@@ -131,5 +162,14 @@ mod tests {
         let rows = apply("skip\n中😀ERR", &[rule("ERR")]).expect("filter");
         assert_eq!(rows[0].line, 1);
         assert_eq!(rows[0].highlights[0].start, 3);
+    }
+
+    #[test]
+    fn cancellation_never_returns_partial_filter_results() {
+        let text = std::iter::repeat_n("keep", 300)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let error = apply_with_cancel(&text, &[rule("keep")], || true).expect_err("应取消");
+        assert!(matches!(error, crate::error::AppError::Cancelled));
     }
 }

@@ -3,7 +3,7 @@
  *
  * 三条纪律都在这里，组件里一条都不用重复：
  * 1. 以 Rust 为准的操作前必须 flush 编辑同步队列（SPEC P1 契约第 4 条）；
- * 2. 有选区就作用于选区，没有就作用于全文；
+ * 2. 文本转换有选区就作用于选区；「格式化文档」按名称与 SPEC F9 始终作用于全文；
  * 3. 结果作为**一次编辑批次**落下去，从而整次操作是单个撤销步骤。
  */
 import { useCallback } from "react";
@@ -60,7 +60,7 @@ export function useTextTools({
    *
    * 返回 `null` 表示没有可操作的文档，调用方直接放弃。
    */
-  const prepare = useCallback(async (): Promise<{
+  const prepare = useCallback(async (includeSelection = true): Promise<{
     documentId: string;
     selection: Selection | undefined;
   } | null> => {
@@ -69,7 +69,7 @@ export function useTextTools({
     // 队列里还压着的编辑不 flush，Rust 看到的就是旧正文，
     // 算出来的改动坐标会落在错的位置上（SPEC P1 契约第 4 条）
     await handle?.flush();
-    const selection = handle?.getSelection();
+    const selection = includeSelection ? handle?.getSelection() : undefined;
     return {
       documentId,
       selection:
@@ -143,14 +143,13 @@ export function useTextTools({
   const runFormat = useCallback(
     (syntax: FormatSyntax, minify: boolean) => {
       void (async () => {
-        const context = await prepare();
+        const context = await prepare(false);
         if (!context) return;
         try {
           const edits = await planFormat(
             context.documentId,
             syntax,
             { minify, indentWidth: tabWidth, useTabs },
-            context.selection,
           );
           if (edits.length > 0) handleRef.current?.applyReplacements(edits);
         } catch (error) {

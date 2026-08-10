@@ -8,7 +8,10 @@ import {
   useState,
 } from "react";
 import type { EditorStatus } from "../editor/useEditorView";
-import { StreamViewer } from "../editor/StreamViewer";
+import {
+  StreamViewer,
+  type StreamViewerHandle,
+} from "../editor/StreamViewer";
 import { Icon } from "../design/Icon";
 import { Button } from "../design/components/Button";
 import { Modal } from "../design/components/Modal";
@@ -68,6 +71,7 @@ import { useDiffStore } from "../store/diffStore";
 import {
   closableIdsToRight,
   closableOtherIds,
+  mostRecentlyUsed,
   useDocumentStore,
 } from "../store/documentStore";
 import { registerWorkspaceActions } from "./registerWorkspaceActions";
@@ -76,22 +80,20 @@ import {
   isEnabled,
   setShortcutOverrides,
 } from "../lib/actionRegistry";
+import { formatShortcut } from "../lib/keybinding";
 import {
   EditorContextMenu,
   type EditorMenuEntry,
 } from "../editor/EditorContextMenu";
-import { MouseGestureOverlay } from "./MouseGestureOverlay";
 import { StatusBar } from "./StatusBar";
 import { TabBar } from "./TabBar";
 import { Toolbar } from "./Toolbar";
 import { useAppearance } from "./useAppearance";
 import { markCleanExit, useBackup } from "./useBackup";
 import { useConfig } from "./useConfig";
-import { useKeyboard } from "./useKeyboard";
-import { useMouseGestures } from "./useMouseGestures";
+import { currentPlatform, useKeyboard } from "./useKeyboard";
 import { useOpenRequests } from "./useOpenRequests";
 import { useUpdateFlow } from "./useUpdateFlow";
-import { resolveGestures } from "../lib/mouseGestures";
 import { useSession } from "./useSession";
 import { useWorkspace } from "./useWorkspace";
 
@@ -111,8 +113,6 @@ export function App() {
   const {
     tabs,
     activeId,
-    activate,
-    activatePrevious,
     setSyncStatus,
     setViewportAnchor,
     setFoldedLines,
@@ -123,10 +123,6 @@ export function App() {
   const shortcutOverrides = useAppStore((state) => state.shortcutOverrides);
   const tabWidth = useAppStore((state) => state.tabWidth);
   const tabIndentMode = useAppStore((state) => state.tabIndentMode);
-  const mouseGesturesEnabled = useAppStore(
-    (state) => state.mouseGesturesEnabled,
-  );
-  const mouseGestures = useAppStore((state) => state.mouseGestures);
   const configuredTools = useAppStore((state) => state.externalTools);
   const previewSyncScroll = useAppStore((state) => state.previewSyncScroll);
   const previewBlockRemoteImages = useAppStore(
@@ -134,6 +130,10 @@ export function App() {
   );
   const diff = useDiffStore();
   const workspace = useWorkspace();
+  const activatePreviousDocument = useCallback(() => {
+    const target = mostRecentlyUsed(tabs, activeId);
+    if (target) void workspace.activate(target);
+  }, [activeId, tabs, workspace]);
   const fileTree = useFileTree(workspace.report);
   const backup = useBackup({
     activeDocumentId: activeId,
@@ -186,6 +186,7 @@ export function App() {
   const diffNavigation = useRef<((forward: boolean) => void) | null>(null);
   const encodingButtonRef = useRef<HTMLButtonElement>(null);
   const lineEndingButtonRef = useRef<HTMLButtonElement>(null);
+  const streamViewerRef = useRef<StreamViewerHandle>(null);
 
   const activeTab =
     tabs.find((tab) => tab.meta.documentId === activeId) ?? null;
@@ -355,6 +356,7 @@ export function App() {
   const filter = useFilterView({
     documentId: activeDiff ? null : activeId,
     open: filterPanelOpen && !activeDiff,
+    stream: activeTab?.meta.mode === "stream",
   });
 
   const pathSearch = usePathSearch({
@@ -436,6 +438,7 @@ export function App() {
     useTabs: tabIndentMode === "tabs",
     fileName: activeTab?.path ?? activeTab?.meta.fileName ?? null,
   });
+  const canFormatDocument = textTools.formatSyntax() !== null;
 
   const actionContext = useMemo(
     () => ({
@@ -443,6 +446,7 @@ export function App() {
       isDirty: activeTab?.meta.dirty ?? false,
       canUndo: activeTab !== null,
       canRedo: activeTab !== null,
+      canFormatDocument,
       isResyncing: resyncing,
       isStream: activeTab?.meta.mode === "stream",
       isMarkdown: canPreviewMarkdown,
@@ -452,6 +456,7 @@ export function App() {
     }),
     [
       activeTab,
+      canFormatDocument,
       resyncing,
       canPreviewMarkdown,
       backup.pending.length,
@@ -479,6 +484,10 @@ export function App() {
           {
             id,
             labelKey: action.titleKey,
+            icon: action.icon,
+            shortcut: action.shortcut
+              ? formatShortcut(action.shortcut, currentPlatform())
+              : undefined,
             disabled: !isEnabled(action, actionContext),
           },
         ];
@@ -508,8 +517,9 @@ export function App() {
       void closeDocument(documentId);
       return;
     }
-    activate(documentId);
-    setClosingId(documentId);
+    void workspace.activate(documentId).then((activated) => {
+      if (activated) setClosingId(documentId);
+    });
   };
 
   const requestQuickClose = (documentId: string) => {
@@ -517,11 +527,6 @@ export function App() {
     if (!tab || tab.locked) return;
     requestClose(documentId);
   };
-
-  const gestureBindings = useMemo(
-    () => resolveGestures(mouseGestures),
-    [mouseGestures],
-  );
 
   const externalTools = useExternalTools({
     documentId: activeDiff ? null : activeId,
@@ -546,7 +551,7 @@ export function App() {
         const tab = tabs.find((item) => item.meta.documentId === documentId);
         if (!tab) continue;
         if (tab.meta.dirty) {
-          activate(documentId);
+          if (!(await workspace.activate(documentId))) return;
           setCloseQueue(documentIds.slice(index + 1));
           setClosingId(documentId);
           return;
@@ -554,46 +559,8 @@ export function App() {
         await closeDocument(documentId);
       }
     },
-    [activate, closeDocument, tabs],
+    [closeDocument, tabs, workspace],
   );
-
-  const gesture = useMouseGestures({
-    enabled: mouseGesturesEnabled,
-    bindings: gestureBindings,
-    onMatch: (binding) => {
-      switch (binding.actionId) {
-        case "tab.previous":
-          activatePrevious();
-          return true;
-        case "tab.next": {
-          const index = tabs.findIndex(
-            (tab) => tab.meta.documentId === activeId,
-          );
-          const next = tabs[(index + 1) % tabs.length];
-          if (!next) return false;
-          activate(next.meta.documentId);
-          return true;
-        }
-        case "tab.close":
-          if (!activeId) return false;
-          requestQuickClose(activeId);
-          return true;
-        case "file.new":
-          void workspace.createNew();
-          return true;
-        // 复用标签栏那条批量关闭路径：脏文档的逐个确认队列已经在里面了
-        case "tab.closeOthers": {
-          if (!activeId) return false;
-          const others = closableOtherIds(tabs, activeId);
-          if (others.length === 0) return false;
-          void closeMany(others);
-          return true;
-        }
-        default:
-          return false;
-      }
-    },
-  });
 
   const finishClose = async (save: boolean) => {
     const documentId = closingId;
@@ -661,7 +628,10 @@ export function App() {
     setInstallConfirm(null);
     void (async () => {
       for (const tab of dirtyTabs) {
-        activate(tab.meta.documentId);
+        if (!(await workspace.activate(tab.meta.documentId))) {
+          resolve?.(false);
+          return;
+        }
         if (!(await workspace.save())) {
           resolve?.(false);
           return;
@@ -669,7 +639,7 @@ export function App() {
       }
       resolve?.(true);
     })();
-  }, [activate, dirtyTabs, installConfirm, workspace]);
+  }, [dirtyTabs, installConfirm, workspace]);
 
   /**
    * ????????????????????????
@@ -759,9 +729,21 @@ export function App() {
           )?.path;
           if (path) void revealInFileManager(path);
         },
-        switchToPreviousTab: activatePrevious,
-        openFind: () => setFindMode("find"),
-        openReplace: () => setFindMode("replace"),
+        switchToPreviousTab: activatePreviousDocument,
+        openFind: () => {
+          if (activeTab?.meta.mode === "stream") {
+            streamViewerRef.current?.openFind();
+          } else {
+            setFindMode("find");
+          }
+        },
+        openReplace: () => {
+          if (activeTab?.meta.mode === "stream") {
+            streamViewerRef.current?.openReplace();
+          } else {
+            setFindMode("replace");
+          }
+        },
         findNext: () => void find.step(!find.findReverse),
         findPrevious: () => void find.step(find.findReverse),
         toggleFindReverse: find.toggleFindReverse,
@@ -782,6 +764,10 @@ export function App() {
         toggleBookmarkPanel: () => setBookmarkPanelOpen((open) => !open),
         toggleOutlinePanel: () => setOutlinePanelOpen((open) => !open),
         toggleFilterPanel: () => setFilterPanelOpen((open) => !open),
+        exportFiltered: () => {
+          setFilterPanelOpen(true);
+          if (filter.canExportFiltered) void filter.exportFiltered();
+        },
         openExternalTools: () => setToolPickerOpen(true),
         openWordCount: () => void openWordCount(),
         openSettings: (group = "general") => setSettingsGroup(group),
@@ -815,10 +801,12 @@ export function App() {
     workspace,
     backup,
     clipboardEdit,
-    activatePrevious,
+    activatePreviousDocument,
     activeId,
     closeMany,
     find,
+    filter,
+    activeTab,
     bookmarks,
     outline,
     diff,
@@ -878,11 +866,15 @@ export function App() {
         onOpen={() => void workspace.openPath()}
         onOpenFolder={() => void openFolder()}
         onSave={() => void workspace.save()}
+        onSaveAs={() => void workspace.saveAs()}
         onUndo={() => void workspace.undo()}
         onRedo={() => void workspace.redo()}
         onOpenCommandPalette={() => setOverlay("commandPalette")}
         onToggleMarkdownPreview={toggleMarkdownPreview}
         canSave={Boolean(activeTab) && !resyncing}
+        canSaveAs={
+          Boolean(activeTab) && activeTab?.meta.mode !== "stream" && !resyncing
+        }
         canEdit={Boolean(activeTab) && !resyncing}
         canPreviewMarkdown={canPreviewMarkdown}
         markdownPreviewVisible={
@@ -895,8 +887,9 @@ export function App() {
         tabs={tabs}
         activeId={activeId}
         onActivate={(documentId) => {
-          diff.activate(null);
-          activate(documentId);
+          void workspace.activate(documentId).then((activated) => {
+            if (activated) diff.activate(null);
+          });
         }}
         onClose={requestClose}
         onQuickClose={requestQuickClose}
@@ -1037,9 +1030,13 @@ export function App() {
         {filterPanelOpen && !activeDiff && (
           <FilterPanel
             filter={filter}
-            onPick={(line) =>
-              workspace.handleRef.current?.revealLineColumn(line + 1, 1)
-            }
+            onPick={(line) => {
+              if (activeTab?.meta.mode === "stream") {
+                streamViewerRef.current?.revealLine(line);
+              } else {
+                workspace.handleRef.current?.revealLineColumn(line + 1, 1);
+              }
+            }}
             onClose={() => setFilterPanelOpen(false)}
           />
         )}
@@ -1056,6 +1053,13 @@ export function App() {
             key={activeTab.meta.documentId}
             meta={activeTab.meta}
             onPromote={() => setPromoteStreamOpen(true)}
+            handleRef={streamViewerRef}
+          />
+        ) : activeTab &&
+          workspace.textDocumentId !== activeTab.meta.documentId ? (
+          <div
+            className="flex min-h-0 min-w-0 flex-1"
+            aria-busy="true"
           />
         ) : activeTab ? (
           <Suspense
@@ -1189,7 +1193,7 @@ export function App() {
           }))}
           recentFiles={recentFiles}
           workspaceRoot={fileTree.root?.path ?? null}
-          onActivate={activate}
+          onActivate={(documentId) => void workspace.activate(documentId)}
           onOpenPath={(path) => void workspace.openAtPath(path)}
           onGoToLine={(initialQuery) => {
             setGoToLineInitialQuery(initialQuery);
@@ -1349,7 +1353,6 @@ export function App() {
         </pre>
       </Modal>
 
-      <MouseGestureOverlay gesture={gesture} />
     </div>
   );
 }

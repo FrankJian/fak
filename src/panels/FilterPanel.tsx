@@ -60,8 +60,35 @@ export function FilterPanel({ filter, onPick, onClose }: FilterPanelProps) {
             filter.setRules((rules) => [...rules, newRule(rules.length)])
           }
         />
+        {filter.canExportFiltered && (
+          <IconButton
+            icon={filter.exporting ? "stop" : "export"}
+            label={t(
+              filter.exporting
+                ? "filter.cancelExport"
+                : "filter.exportMatches",
+            )}
+            onClick={() =>
+              filter.exporting
+                ? filter.cancelExport()
+                : void filter.exportFiltered()
+            }
+          />
+        )}
         <IconButton icon="close" label={t("filter.close")} onClick={onClose} />
       </div>
+
+      {filter.exporting && (
+        <div
+          aria-label={t("filter.exportProgress")}
+          className="h-[2px] shrink-0 overflow-hidden bg-[var(--bg-active)]"
+        >
+          <div
+            className="h-full bg-[var(--accent)]"
+            style={{ width: `${Math.round(filter.exportProgress * 100)}%` }}
+          />
+        </div>
+      )}
 
       <div className="max-h-[220px] shrink-0 overflow-auto border-b border-[var(--border-subtle)]">
         {filter.rules.map((rule, index) => (
@@ -147,9 +174,21 @@ export function FilterPanel({ filter, onPick, onClose }: FilterPanelProps) {
           className="shrink-0 tabular-nums text-[var(--text-secondary)]"
           style={{ fontSize: "var(--font-size-small)" }}
         >
-          {t("filter.count", { count: filter.total.toLocaleString() })}
+          {t(filter.truncated ? "filter.countCapped" : "filter.count", {
+            count: filter.total.toLocaleString(),
+          })}
         </span>
       </div>
+
+      {filter.notice !== null && (
+        <p
+          role="status"
+          className="px-[var(--space-2)] pb-[var(--space-1)] text-[var(--text-secondary)]"
+          style={{ fontSize: "var(--font-size-small)" }}
+        >
+          {t("filter.exportComplete", { detail: filter.notice })}
+        </p>
+      )}
 
       {filter.problem !== null && (
         <p

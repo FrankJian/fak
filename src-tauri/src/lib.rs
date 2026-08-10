@@ -133,6 +133,9 @@ pub fn run() {
             commands::stream_search::StreamSearchState::default(),
         ))
         .manage(std::sync::Arc::new(
+            commands::stream_transform::StreamTransformState::default(),
+        ))
+        .manage(std::sync::Arc::new(
             commands::external_tools::ExternalToolState::default(),
         ))
         // Arc 而不是裸值：高亮解析要搬到 blocking 线程池上跑，
@@ -183,6 +186,7 @@ pub fn run() {
             commands::filter::start_filter,
             commands::filter::fetch_filter_page,
             commands::filter::dispose_filter,
+            commands::filter::cancel_filter,
             commands::external_tools::list_external_tools,
             commands::external_tools::run_external_tool,
             commands::external_tools::cancel_external_tool,
@@ -242,6 +246,10 @@ pub fn run() {
             commands::stream_search::fetch_stream_search_page,
             commands::stream_search::cancel_stream_search,
             commands::stream_search::dispose_stream_search,
+            commands::stream_transform::preview_stream_replace,
+            commands::stream_transform::apply_stream_replace,
+            commands::stream_transform::export_stream_filter,
+            commands::stream_transform::cancel_stream_transform,
             commands::minimap::minimap_density,
             commands::path_search::path_search_start,
             commands::path_search::path_search_next,

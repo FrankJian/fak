@@ -72,15 +72,14 @@ export function formatSyntaxOf(fileName: string | null): FormatSyntax | null {
   return null;
 }
 
-/** 格式化 / 压缩（SPEC F9.1）。与按行工具同构，回传最小编辑集。 */
+/** 格式化 / 压缩整个文档（SPEC F9.1）。回传最小编辑集。 */
 export function planFormat(
   documentId: string,
   syntax: FormatSyntax,
   options: { minify: boolean; indentWidth: number; useTabs: boolean },
-  selection?: Selection,
 ): Promise<ReplaceEdit[]> {
   return invoke<ReplaceEdit[]>("plan_format", {
-    args: { documentId, syntax, ...options, selection: selection ?? null },
+    args: { documentId, syntax, ...options },
   });
 }
 

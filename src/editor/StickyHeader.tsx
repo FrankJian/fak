@@ -12,19 +12,30 @@ const ROW_HEIGHT = 22;
 interface StickyHeaderProps {
   chain: readonly OutlineNode[];
   onPick: (node: OutlineNode) => void;
+  /** CodeMirror 行号、折叠和标记槽的总宽度；标题只能覆盖正文区域。 */
+  gutterWidth: number;
+  /** 0 基视口首行；仍在视口中的定义不能再画一份粘性副本。 */
+  topLine: number;
 }
 
-export function StickyHeader({ chain, onPick }: StickyHeaderProps) {
+export function StickyHeader({
+  chain,
+  onPick,
+  gutterWidth,
+  topLine,
+}: StickyHeaderProps) {
   const { t } = useTranslation();
-  if (chain.length === 0) return null;
+  const hiddenAboveViewport = chain.filter((node) => node.line < topLine);
+  if (hiddenAboveViewport.length === 0) return null;
 
   return (
     <div
       aria-label={t('sticky.label')}
       // 只有行本身接管点击，空白处的滚轮与选区要照样落到编辑器上
-      className="pointer-events-none absolute inset-x-0 top-0 z-10"
+      className="pointer-events-none absolute right-0 top-0 z-10 bg-[var(--bg-raised)]"
+      style={{ left: `${gutterWidth}px` }}
     >
-      {chain.map((node, depth) => (
+      {hiddenAboveViewport.map((node, depth) => (
         <button
           key={`${node.line}-${node.name}`}
           type="button"

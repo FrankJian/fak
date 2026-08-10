@@ -233,6 +233,48 @@ pub fn save_atomic(
     })
 }
 
+/// 流式原子写入：与 `save_atomic` 保持相同的临时文件、fsync、权限和 rename 语义，
+/// 但正文由回调分块写入，内存不会随目标文件大小增长。
+pub fn save_atomic_stream(
+    path: &Path,
+    expected_size: u64,
+    write_content: impl FnOnce(&mut File) -> AppResult<u64>,
+) -> AppResult<SaveOutcome> {
+    let directory = path.parent().unwrap_or_else(|| Path::new("."));
+    check_disk_space(directory, expected_size)?;
+
+    let original_metadata = std::fs::metadata(path).ok();
+    let original_permissions = original_metadata
+        .as_ref()
+        .map(std::fs::Metadata::permissions);
+    let mut temp = tempfile::NamedTempFile::new_in(directory)
+        .map_err(|error| AppError::from_io(&error, path))?;
+    let bytes_written = write_content(temp.as_file_mut())?;
+    temp.as_file()
+        .sync_all()
+        .map_err(|error| AppError::from_io(&error, path))?;
+
+    if let Some(permissions) = original_permissions {
+        let _ = temp.as_file().set_permissions(permissions);
+    }
+    if let Some(metadata) = original_metadata.as_ref() {
+        preserve_owner(temp.as_file(), metadata, path)?;
+    }
+    temp.persist(path).map_err(|error| {
+        if error.error.kind() == std::io::ErrorKind::StorageFull {
+            AppError::DiskFull
+        } else {
+            AppError::from_io(&error.error, path)
+        }
+    })?;
+    sync_directory(directory);
+
+    Ok(SaveOutcome {
+        fingerprint: FileFingerprint::read(path)?,
+        bytes_written,
+    })
+}
+
 #[cfg(unix)]
 fn sync_directory(directory: &Path) {
     // 目录 fsync 失败不该让一次成功的保存被报成失败，最坏是掉电时丢目录项
@@ -336,6 +378,39 @@ mod tests {
             .map(|entry| entry.file_name())
             .collect();
         assert_eq!(entries.len(), 1, "临时文件必须已被 rename 掉：{entries:?}");
+    }
+
+    #[test]
+    fn streaming_atomic_save_writes_chunks_without_a_full_buffer() {
+        let dir = temp_dir();
+        let path = dir.path().join("stream.txt");
+        let outcome = save_atomic_stream(&path, 6, |writer| {
+            writer
+                .write_all(b"abc")
+                .map_err(|error| AppError::from_io(&error, &path))?;
+            writer
+                .write_all(b"def")
+                .map_err(|error| AppError::from_io(&error, &path))?;
+            Ok(6)
+        })
+        .expect("流式保存");
+        assert_eq!(outcome.bytes_written, 6);
+        assert_eq!(std::fs::read(&path).expect("读取"), b"abcdef");
+    }
+
+    #[test]
+    fn failed_streaming_save_keeps_the_original_file() {
+        let dir = temp_dir();
+        let path = dir.path().join("stream.txt");
+        std::fs::write(&path, b"original").expect("原文件");
+        let result = save_atomic_stream(&path, 6, |writer| {
+            writer
+                .write_all(b"partial")
+                .map_err(|error| AppError::from_io(&error, &path))?;
+            Err(AppError::Cancelled)
+        });
+        assert!(matches!(result, Err(AppError::Cancelled)));
+        assert_eq!(std::fs::read(&path).expect("读取"), b"original");
     }
 
     #[test]

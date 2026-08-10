@@ -51,6 +51,20 @@ describe("Markdown 工具栏文本变换", () => {
     ).toBe("one\ntwo");
   });
 
+  it("空行插入有序列表时只选中占位正文，输入不会覆盖编号", () => {
+    const edit = markdownTransform("orderedList", "", { from: 0, to: 0 });
+
+    expect(edit.insert).toBe("1. list item");
+    expect(edit.selection).toEqual({ from: 3, to: 12 });
+  });
+
+  it("给已有正文添加列表时保留光标位置而不是选中整行", () => {
+    const edit = markdownTransform("orderedList", "item", { from: 2, to: 2 });
+
+    expect(edit.insert).toBe("1. item");
+    expect(edit.selection).toEqual({ from: 5, to: 5 });
+  });
+
   it("链接和表格保留可编辑的 Markdown 结构", () => {
     expect(markdownTransform("link", "name", { from: 0, to: 4 }).insert).toBe(
       "[name](https://)",

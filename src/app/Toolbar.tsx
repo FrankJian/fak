@@ -4,12 +4,15 @@
  */
 import { IconButton } from '../design/components/IconButton';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatShortcut } from '../lib/keybinding';
+import { currentPlatform } from './useKeyboard';
 
 export interface ToolbarActions {
   onNew: () => void;
   onOpen: () => void;
   onOpenFolder: () => void;
   onSave: () => void;
+  onSaveAs: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onOpenCommandPalette: () => void;
@@ -18,6 +21,7 @@ export interface ToolbarActions {
 
 interface ToolbarProps extends ToolbarActions {
   canSave: boolean;
+  canSaveAs: boolean;
   canEdit: boolean;
   canPreviewMarkdown: boolean;
   markdownPreviewVisible: boolean;
@@ -28,16 +32,19 @@ export function Toolbar({
   onOpen,
   onOpenFolder,
   onSave,
+  onSaveAs,
   onUndo,
   onRedo,
   onOpenCommandPalette,
   onToggleMarkdownPreview,
   canSave,
+  canSaveAs,
   canEdit,
   canPreviewMarkdown,
   markdownPreviewVisible,
 }: ToolbarProps) {
   const { t } = useTranslation();
+  const undoShortcut = formatShortcut('Mod+Z', currentPlatform());
 
   return (
     <div
@@ -59,6 +66,13 @@ export function Toolbar({
         onClick={onSave}
         disabled={!canSave}
       />
+      <IconButton
+        icon="saveAs"
+        label={t('toolbar.saveAs')}
+        shortcut="Ctrl+Shift+S"
+        onClick={onSaveAs}
+        disabled={!canSaveAs}
+      />
 
       <span
         aria-hidden
@@ -69,7 +83,7 @@ export function Toolbar({
       <IconButton
         icon="undo"
         label={t('toolbar.undo')}
-        shortcut="Ctrl+Z"
+        shortcut={undoShortcut}
         onClick={onUndo}
         disabled={!canEdit}
       />

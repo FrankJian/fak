@@ -137,6 +137,21 @@ export function EditorPane({
     longLineWarningLabel: t("editor.longLineDegraded"),
     handleRef,
   });
+  const [gutterWidth, setGutterWidth] = useState(0);
+
+  useEffect(() => {
+    const gutters =
+      containerRef.current?.querySelector<HTMLElement>(".cm-gutters");
+    if (!gutters) return;
+
+    const measure = () =>
+      setGutterWidth(Math.ceil(gutters.getBoundingClientRect().width));
+    measure();
+    // 行号从 99 变成 100、切换行号设置或折叠槽出现时宽度都会变化。
+    const observer = new ResizeObserver(measure);
+    observer.observe(gutters);
+    return () => observer.disconnect();
+  }, [containerRef, meta.documentId]);
 
   const changeMarks = useChangeMarks({
     documentId: meta.documentId,
@@ -169,7 +184,12 @@ export function EditorPane({
       )}
       <div ref={paneRef} className="relative flex min-h-0 flex-1">
         <div className="relative min-h-0 min-w-0 flex-1">
-          <StickyHeader chain={context.sticky} onPick={context.goTo} />
+          <StickyHeader
+            chain={context.sticky}
+            onPick={context.goTo}
+            gutterWidth={gutterWidth}
+            topLine={topLine}
+          />
           <div
             ref={containerRef}
             className="h-full overflow-hidden"

@@ -117,7 +117,11 @@ fn adr02_tier_c(c: &mut Criterion) {
         let mut cursor = 0usize;
         b.iter(|| {
             cursor = (cursor + 977) % line_count.saturating_sub(240).max(1);
-            black_box(index.read_lines(cursor, 240).lines.len())
+            black_box(
+                index
+                    .read_lines(cursor, 240)
+                    .map(|window| window.lines.len()),
+            )
         })
     });
     group.finish();

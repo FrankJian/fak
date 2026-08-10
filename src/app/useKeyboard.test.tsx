@@ -12,6 +12,7 @@ const context: ActionContext = {
   isDirty: false,
   canUndo: false,
   canRedo: false,
+  canFormatDocument: false,
   isResyncing: false,
   isStream: false,
   hasPendingBackups: false,

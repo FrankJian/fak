@@ -6,6 +6,8 @@ describe('syntaxKeyFromFileName', () => {
     expect(syntaxKeyFromFileName('app.tsx')).toBe('tsx');
     expect(syntaxKeyFromFileName('main.rs')).toBe('rust');
     expect(syntaxKeyFromFileName('README.md')).toBe('markdown');
+    expect(syntaxKeyFromFileName('build.sh')).toBe('bash');
+    expect(syntaxKeyFromFileName('deploy.bash')).toBe('bash');
   });
 
   it('returns null for unknown extensions', () => {

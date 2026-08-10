@@ -187,7 +187,42 @@ select:disabled,
 .markdown-preview-content h6 {
   color: var(--text-primary);
   line-height: 1.25;
-  margin: var(--space-5) 0 var(--space-2);
+  margin: var(--space-7) 0 var(--space-3);
+}
+
+.markdown-preview-content h1 {
+  font-size: calc(var(--font-size-ui) * 1.75);
+  font-weight: var(--weight-strong);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-2);
+}
+
+.markdown-preview-content h2 {
+  font-size: calc(var(--font-size-ui) * 1.5);
+  font-weight: var(--weight-strong);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-1);
+}
+
+.markdown-preview-content h3 {
+  font-size: calc(var(--font-size-ui) * 1.25);
+  font-weight: var(--weight-strong);
+}
+
+.markdown-preview-content h4 {
+  font-size: calc(var(--font-size-ui) * 1.1);
+  font-weight: var(--weight-medium);
+}
+
+.markdown-preview-content h5 {
+  font-size: var(--font-size-ui);
+  font-weight: var(--weight-strong);
+}
+
+.markdown-preview-content h6 {
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--weight-strong);
 }
 
 .markdown-preview-content p,
@@ -195,6 +230,35 @@ select:disabled,
 .markdown-preview-content ol,
 .markdown-preview-content blockquote {
   margin: 0 0 var(--space-3);
+}
+
+.markdown-preview-content ul,
+.markdown-preview-content ol {
+  padding-left: var(--space-7);
+}
+
+.markdown-preview-content ul {
+  list-style: disc;
+}
+
+.markdown-preview-content ol {
+  list-style: decimal;
+}
+
+.markdown-preview-content li + li {
+  margin-top: var(--space-1);
+}
+
+.markdown-preview-content li::marker {
+  color: var(--text-secondary);
+}
+
+.markdown-preview-content li:has(> input[type="checkbox"]) {
+  list-style: none;
+}
+
+.markdown-preview-content input[type="checkbox"] {
+  margin-right: var(--space-2);
 }
 
 .markdown-preview-content a {

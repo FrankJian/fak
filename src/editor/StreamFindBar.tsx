@@ -1,7 +1,7 @@
 /**
  * Tier C 查找栏（SPEC P4-03 步骤 4）。
  *
- * 只做「找到并跳过去」：Tier C 不可编辑，替换在这一档没有意义。
+ * 查找仍在当前只读视图中导航；替换动作进入“预览后另存”，不修改源文件。
  */
 import { Icon } from "../design/Icon";
 import { IconButton } from "../design/components/IconButton";
@@ -11,9 +11,10 @@ import type { StreamFind } from "./useStreamFind";
 
 interface StreamFindBarProps {
   find: StreamFind;
+  onReplaceToCopy: () => void;
 }
 
-export function StreamFindBar({ find }: StreamFindBarProps) {
+export function StreamFindBar({ find, onReplaceToCopy }: StreamFindBarProps) {
   const { t } = useTranslation();
 
   return (
@@ -60,6 +61,12 @@ export function StreamFindBar({ find }: StreamFindBarProps) {
                 )}
       </span>
 
+      <IconButton
+        icon="replace"
+        label={t("stream.replace.open")}
+        disabled={find.query.length === 0}
+        onClick={onReplaceToCopy}
+      />
       <IconButton
         icon="chevronUp"
         label={t("find.previous")}

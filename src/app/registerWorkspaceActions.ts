@@ -52,6 +52,7 @@ export interface PanelActions {
   formatMarkdown: (format: MarkdownFormat) => void;
   toggleOutlinePanel: () => void;
   toggleFilterPanel: () => void;
+  exportFiltered: () => void;
   openExternalTools: () => void;
   refreshOutline: () => void;
   expandOutline: () => void;
@@ -127,6 +128,18 @@ export function registerWorkspaceActions(
     when: ropeReady,
     run: async () => {
       await workspace.save();
+    },
+  });
+
+  registerAction({
+    id: "file.saveAs",
+    titleKey: "toolbar.saveAs",
+    categoryKey: "category.file",
+    icon: "saveAs",
+    shortcut: "Ctrl+Shift+S",
+    when: ropeReady,
+    run: async () => {
+      await workspace.saveAs();
     },
   });
 
@@ -600,14 +613,14 @@ export function registerWorkspaceActions(
     run: () => panels.formatMarkdown("rule"),
   });
 
-  // 撤销 / 重做是仅有的两个要让位给输入框的动作：在查找框里按 Ctrl+Z，
+  // 撤销 / 重做是仅有的两个要让位给输入框的动作：在查找框里按撤销快捷键，
   // 用户想撤销的是刚打的查询词，不是整篇文档（编辑器正文不算输入框，见 keybinding.ts）
   registerAction({
     id: "edit.undo",
     titleKey: "toolbar.undo",
     categoryKey: "category.edit",
     icon: "undo",
-    shortcut: "Ctrl+Z",
+    shortcut: "Mod+Z",
     keyScope: "outsideTextInput",
     when: ropeReady,
     run: () => workspace.undo(),
@@ -686,7 +699,7 @@ export function registerWorkspaceActions(
     categoryKey: "category.edit",
     icon: "find",
     shortcut: "Ctrl+F",
-    when: ropeReady,
+    when: (context) => context.hasDocument && !context.isResyncing,
     run: () => panels.openFind(),
   });
 
@@ -696,7 +709,7 @@ export function registerWorkspaceActions(
     categoryKey: "category.edit",
     icon: "replace",
     shortcut: "Ctrl+H",
-    when: ropeReady,
+    when: (context) => context.hasDocument && !context.isResyncing,
     run: () => panels.openReplace(),
   });
 
@@ -982,8 +995,9 @@ export function registerWorkspaceActions(
     titleKey: "textTool.formatDocument",
     categoryKey: "category.edit",
     icon: "formatDocument",
-    when: (context) =>
-      editorReady(context) && textTools.formatSyntax() !== null,
+    // 文件类型属于实时动作上下文，不能读取注册动作时捕获的旧标签信息。
+    // 否则刚打开受支持文件时菜单会沿用“无文件”的禁用态，直到下一次编辑重渲染。
+    when: (context) => editorReady(context) && context.canFormatDocument,
     run: () => {
       const syntax = textTools.formatSyntax();
       if (syntax) textTools.runFormat(syntax, false);
@@ -995,8 +1009,7 @@ export function registerWorkspaceActions(
     titleKey: "textTool.minifyDocument",
     categoryKey: "category.edit",
     icon: "minify",
-    when: (context) =>
-      editorReady(context) && textTools.formatSyntax() !== null,
+    when: (context) => editorReady(context) && context.canFormatDocument,
     run: () => {
       const syntax = textTools.formatSyntax();
       if (syntax) textTools.runFormat(syntax, true);
@@ -1036,8 +1049,17 @@ export function registerWorkspaceActions(
     titleKey: "filter.togglePanel",
     categoryKey: "category.view",
     icon: "filter",
-    when: editorReady,
+    when: hasDoc,
     run: () => panels.toggleFilterPanel(),
+  });
+
+  registerAction({
+    id: "file.exportFiltered",
+    titleKey: "filter.exportMatches",
+    categoryKey: "category.file",
+    icon: "export",
+    when: (context) => context.hasDocument && context.isStream,
+    run: () => panels.exportFiltered(),
   });
 
   // 工具名是用户自定义的，不是 i18n key，没法逐个静态注册；

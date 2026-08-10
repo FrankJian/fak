@@ -41,12 +41,19 @@ export const fakTheme = EditorView.theme({
   },
   ".cm-content": {
     caretColor: "var(--text-primary)",
+    cursor: "text",
   },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--text-primary)" },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+  ".cm-selectionBackground": {
+    backgroundColor: "var(--selection-bg)",
+  },
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground":
     {
-      backgroundColor: "var(--accent-muted)",
+      backgroundColor: "var(--selection-bg)",
     },
+  ".cm-content ::selection": {
+    backgroundColor: "var(--selection-bg)",
+  },
   ".cm-gutters": {
     backgroundColor: "var(--bg-surface)",
     color: "var(--text-tertiary)",
@@ -59,16 +66,12 @@ export const fakTheme = EditorView.theme({
     backgroundColor: "var(--bg-hover)",
     color: "var(--text-secondary)",
   },
-  ".cm-activeLine": { backgroundColor: "var(--bg-hover)" },
+  ".cm-activeLine": { backgroundColor: "var(--current-line-bg)" },
   ".cm-selectionMatch": { backgroundColor: "var(--accent-muted)" },
   ".cm-foldPlaceholder": {
     backgroundColor: "var(--bg-surface)",
     borderColor: "var(--border-default)",
     color: "var(--text-secondary)",
-  },
-  ".cm-foldGutter .cm-gutterElement": {
-    color: "var(--text-tertiary)",
-    cursor: "pointer",
   },
   ".cm-scroller": { overflow: "auto" },
   ".cm-fak-rulers": {

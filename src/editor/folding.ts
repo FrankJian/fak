@@ -19,6 +19,71 @@ const setFoldRanges = StateEffect.define<readonly FoldRange[]>();
 const PAGE_SIZE = 1_000;
 const REFRESH_DELAY_MS = 120;
 
+export const FOLD_MARKER_LAYOUT = {
+  width: "var(--space-5)",
+  height: "1em",
+  glyphSize: "clamp(var(--space-1), 0.45em, var(--space-2))",
+  transformOrigin: "50% 50%",
+  expandedTransform: "rotate(45deg)",
+  collapsedTransform: "rotate(-45deg)",
+} as const;
+
+/**
+ * 两个状态必须复用同一枚箭头，仅绕中心旋转。
+ * 使用两个字体字符会受各字体的基线与字面框影响，展开、折叠时看起来会上下跳动。
+ */
+export function createFoldMarkerDom(expanded: boolean): HTMLElement {
+  const marker = document.createElement("span");
+  marker.className = "cm-fak-foldMarker";
+  marker.dataset.state = expanded ? "expanded" : "collapsed";
+  marker.setAttribute("aria-hidden", "true");
+
+  const glyph = document.createElement("i");
+  glyph.className = "cm-fak-foldMarkerGlyph";
+  marker.append(glyph);
+  return marker;
+}
+
+const foldMarkerTheme = EditorView.theme({
+  ".cm-foldGutter .cm-gutterElement": {
+    padding: "0",
+    color: "var(--text-tertiary)",
+    cursor: "pointer",
+  },
+  ".cm-foldGutter .cm-fak-foldMarker": {
+    boxSizing: "border-box",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: FOLD_MARKER_LAYOUT.width,
+    height: FOLD_MARKER_LAYOUT.height,
+    padding: "0",
+    verticalAlign: "middle",
+    borderRadius: "var(--radius-control)",
+  },
+  ".cm-foldGutter .cm-gutterElement:hover .cm-fak-foldMarker": {
+    color: "var(--text-secondary)",
+    backgroundColor: "var(--bg-hover)",
+  },
+  ".cm-foldGutter .cm-fak-foldMarkerGlyph": {
+    boxSizing: "border-box",
+    display: "block",
+    width: FOLD_MARKER_LAYOUT.glyphSize,
+    height: FOLD_MARKER_LAYOUT.glyphSize,
+    borderRight: "1.5px solid currentColor",
+    borderBottom: "1.5px solid currentColor",
+    transformOrigin: FOLD_MARKER_LAYOUT.transformOrigin,
+  },
+  '.cm-foldGutter .cm-fak-foldMarker[data-state="expanded"] .cm-fak-foldMarkerGlyph':
+    {
+      transform: FOLD_MARKER_LAYOUT.expandedTransform,
+    },
+  '.cm-foldGutter .cm-fak-foldMarker[data-state="collapsed"] .cm-fak-foldMarkerGlyph':
+    {
+      transform: FOLD_MARKER_LAYOUT.collapsedTransform,
+    },
+});
+
 const foldRangesField = StateField.define<readonly FoldRange[]>({
   create: () => [],
   update(ranges, update) {
@@ -128,13 +193,13 @@ export function foldingExtensions(
     foldRangesField,
     rustFoldService,
     foldGutter({
-      openText: "⌄",
-      closedText: "›",
+      markerDOM: createFoldMarkerDom,
       foldingChanged: (update) =>
         update.transactions.some((transaction) =>
           transaction.effects.some((effect) => effect.is(setFoldRanges)),
         ),
     }),
+    foldMarkerTheme,
     keymap.of(foldKeymap),
     loader(documentId, initialFoldedLines),
   ];

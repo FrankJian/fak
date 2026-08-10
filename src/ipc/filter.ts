@@ -21,6 +21,7 @@ export interface FilterStarted {
   sessionId: string;
   total: number;
   firstPage: FilteredLine[];
+  truncated: boolean;
 }
 
 export function startFilter(
@@ -45,4 +46,8 @@ export function fetchFilterPage(
 
 export function disposeFilter(sessionId: string): Promise<void> {
   return invoke<void>("dispose_filter", { sessionId });
+}
+
+export function cancelFilter(documentId: string): Promise<void> {
+  return invoke<void>("cancel_filter", { documentId });
 }

@@ -18,8 +18,10 @@ export async function pickFolderToOpen(): Promise<string | null> {
   return typeof selected === 'string' ? selected : null;
 }
 
-export async function pickPathToSave(): Promise<string | null> {
+export async function pickPathToSave(
+  defaultPath?: string,
+): Promise<string | null> {
   if (!isTauriAvailable()) return null;
-  const selected = await save({});
+  const selected = await save({ defaultPath });
   return typeof selected === 'string' ? selected : null;
 }

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { DEFAULT_CONFIG } from "../ipc/config";
 import {
   appearanceExtensions,
+  fakTheme,
   indentExtensions,
   type Appearance,
 } from "./extensions";
@@ -35,6 +38,39 @@ describe("缩进设置", () => {
 });
 
 describe("外观扩展", () => {
+  it("正文编辑区使用文本光标，而不是继承桌面的默认箭头", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({ extensions: [fakTheme] }),
+    });
+
+    expect(getComputedStyle(view.contentDOM).cursor).toBe("text");
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it("文本选区使用专用背景色，而不是被当前行高亮淹没", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({ extensions: [fakTheme] }),
+    });
+    const selection = document.createElement("div");
+    selection.className = "cm-selectionBackground";
+    view.dom.append(selection);
+
+    expect(getComputedStyle(selection).backgroundColor).toBe(
+      "var(--selection-bg)",
+    );
+
+    view.destroy();
+    parent.remove();
+  });
+
   it("关掉行号就不装 lineNumbers", () => {
     const withNumbers = appearanceExtensions(
       { ...base, showLineNumbers: true },

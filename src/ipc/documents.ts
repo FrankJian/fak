@@ -75,7 +75,7 @@ export function openFile(path: string, force = false): Promise<DocumentMeta> {
   return invoke<DocumentMeta>("open_file", { args: { path, force } });
 }
 
-/** 用户确认内存估算后，把 Tier C mmap 视图提升为可编辑的 Tier B Rope。 */
+/** 用户确认内存估算后，把 Tier C 按需视图提升为可编辑的 Tier B Rope。 */
 export function promoteStreamDocument(
   documentId: string,
 ): Promise<DocumentMeta> {

@@ -230,9 +230,6 @@ pub struct Config {
     pub preview_sync_scroll: bool,
     pub preview_block_remote_images: bool,
     pub paste_image_mode: PasteImageMode,
-    /// 鼠标手势（SPEC F12）。键是方向序列如 `LR`，值是动作 id
-    pub mouse_gestures_enabled: bool,
-    pub mouse_gestures: BTreeMap<String, String>,
 
     /// 更新（SPEC §12.3）。代理串可能带账号密码，只落配置文件，绝不进日志。
     pub update_proxy_server: String,
@@ -299,8 +296,6 @@ impl Default for Config {
             preview_sync_scroll: true,
             preview_block_remote_images: false,
             paste_image_mode: PasteImageMode::AssetFile,
-            mouse_gestures_enabled: true,
-            mouse_gestures: BTreeMap::new(),
             update_proxy_server: String::new(),
             update_ignore_system_proxy: false,
             auto_check_updates: true,
@@ -448,8 +443,6 @@ pub fn from_map(map: &Map<String, Value>) -> Parsed {
             defaults.preview_block_remote_images,
         ),
         paste_image_mode: reader.get("pasteImageMode", defaults.paste_image_mode),
-        mouse_gestures_enabled: reader.get("mouseGesturesEnabled", defaults.mouse_gestures_enabled),
-        mouse_gestures: reader.get("mouseGestures", defaults.mouse_gestures),
         update_proxy_server: reader.get("updateProxyServer", defaults.update_proxy_server),
         update_ignore_system_proxy: reader.get(
             "updateIgnoreSystemProxy",

@@ -23,6 +23,7 @@ pub mod session;
 pub mod shell_integration;
 pub mod startup;
 pub mod stream_search;
+pub mod stream_transform;
 pub mod syntax;
 pub mod tail;
 pub mod textops;

@@ -98,9 +98,6 @@ export interface Config {
   previewSyncScroll: boolean;
   previewBlockRemoteImages: boolean;
   pasteImageMode: PasteImageMode;
-  /** 鼠标手势（SPEC F12）。键是方向序列如 `LR`，值是动作 id */
-  mouseGesturesEnabled: boolean;
-  mouseGestures: Record<string, string>;
 
   /**
    * 更新代理（SPEC §12.3.2）。代理串可能带账号密码，只落配置文件，绝不进日志。
@@ -191,8 +188,6 @@ export const DEFAULT_CONFIG: Config = {
   previewSyncScroll: true,
   previewBlockRemoteImages: false,
   pasteImageMode: "assetFile",
-  mouseGesturesEnabled: true,
-  mouseGestures: {},
   minimap: true,
   minimapAutohide: true,
   singleInstance: true,

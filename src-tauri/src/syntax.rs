@@ -56,6 +56,7 @@ pub enum SyntaxKey {
     Xml,
     Toml,
     Ini,
+    Bash,
 }
 
 impl SyntaxKey {
@@ -81,6 +82,7 @@ impl SyntaxKey {
         Self::Xml,
         Self::Toml,
         Self::Ini,
+        Self::Bash,
     ];
 
     pub fn from_file_name(file_name: &str) -> Option<Self> {
@@ -112,6 +114,7 @@ impl SyntaxKey {
             "xml" | "xsd" | "xsl" | "xslt" | "svg" => Some(Self::Xml),
             "toml" => Some(Self::Toml),
             "ini" | "cfg" | "conf" | "properties" => Some(Self::Ini),
+            "sh" | "bash" => Some(Self::Bash),
             _ => None,
         }
     }
@@ -141,6 +144,7 @@ impl SyntaxKey {
             "xml" | "svg" => Some(Self::Xml),
             "toml" => Some(Self::Toml),
             "ini" | "cfg" | "conf" | "properties" => Some(Self::Ini),
+            "sh" | "shell" | "bash" => Some(Self::Bash),
             _ => None,
         }
     }
@@ -169,6 +173,7 @@ impl SyntaxKey {
             Self::Xml => tree_sitter_xml::LANGUAGE_XML.into(),
             Self::Toml => tree_sitter_toml_ng::LANGUAGE.into(),
             Self::Ini => tree_sitter_ini::LANGUAGE.into(),
+            Self::Bash => tree_sitter_bash::LANGUAGE.into(),
         }
     }
 
@@ -199,6 +204,7 @@ impl SyntaxKey {
             Self::Xml => tree_sitter_xml::XML_HIGHLIGHT_QUERY.to_string(),
             Self::Toml => tree_sitter_toml_ng::HIGHLIGHTS_QUERY.to_string(),
             Self::Ini => tree_sitter_ini::HIGHLIGHTS_QUERY.to_string(),
+            Self::Bash => tree_sitter_bash::HIGHLIGHT_QUERY.to_string(),
         }
     }
 
@@ -227,6 +233,7 @@ impl SyntaxKey {
             Self::Xml => include_str!("queries/outline-xml.scm"),
             Self::Toml => include_str!("queries/outline-toml.scm"),
             Self::Ini => include_str!("queries/outline-ini.scm"),
+            Self::Bash => include_str!("queries/outline-bash.scm"),
         })
     }
 }
@@ -675,6 +682,11 @@ mod tests {
         );
         assert_eq!(SyntaxKey::from_file_name("app.yml"), Some(SyntaxKey::Yaml));
         assert_eq!(SyntaxKey::from_file_name("setup.cfg"), Some(SyntaxKey::Ini));
+        assert_eq!(SyntaxKey::from_file_name("build.sh"), Some(SyntaxKey::Bash));
+        assert_eq!(
+            SyntaxKey::from_file_name("deploy.bash"),
+            Some(SyntaxKey::Bash)
+        );
     }
 
     // 查询里写错一个节点名，平时只有打开那门语言的文件才会暴露。
@@ -701,6 +713,17 @@ mod tests {
     #[test]
     fn produces_spans_for_keywords_and_comments() {
         let spans = spans_of(SAMPLE, 0, SAMPLE.len());
+        assert!(spans.iter().any(|span| span.capture == "comment"));
+        assert!(spans.iter().any(|span| span.capture == "keyword"));
+    }
+
+    #[test]
+    fn bash_produces_syntax_highlights() {
+        let source = "#!/bin/sh\n# build the project\nif test -f Cargo.toml; then echo ready; fi\n";
+        let spans = SyntaxCache::default()
+            .spans("shell", SyntaxKey::Bash, source, 1, 0, source.len())
+            .expect("Bash 高亮")
+            .spans;
         assert!(spans.iter().any(|span| span.capture == "comment"));
         assert!(spans.iter().any(|span| span.capture == "keyword"));
     }

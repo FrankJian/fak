@@ -1,8 +1,9 @@
 //! Tier C 文档的按需行访问注册表（SPEC §4.1、ADR-02）。
 //!
-//! 行索引本体沿用已验证的稀疏 mmap 实现；这里把它从 M0 探针的全局单例变成
-//! 可按 document id 管理的正式运行时状态。
+//! 稀疏索引按需读取文件；这里把每份索引按 document id 管理，并在日志追加或
+//! 轮转后用新索引替换旧快照。
 
+use crate::encoding::EncodingLabel;
 use crate::error::{AppError, AppResult};
 use crate::line_index::{LineIndex, LineWindow};
 use dashmap::DashMap;
@@ -26,8 +27,13 @@ pub struct StreamInfo {
 }
 
 impl StreamDocuments {
-    pub fn open(&self, document_id: String, path: &Path) -> AppResult<StreamInfo> {
-        let index = LineIndex::open(path)?;
+    pub fn open(
+        &self,
+        document_id: String,
+        path: &Path,
+        encoding: EncodingLabel,
+    ) -> AppResult<StreamInfo> {
+        let index = LineIndex::open_with_encoding(path, encoding)?;
         let info = StreamInfo {
             line_count: index.line_count(),
             max_line_len: index.max_line_len(),
@@ -54,7 +60,7 @@ impl StreamDocuments {
             .ok_or_else(|| AppError::DocumentNotFound {
                 document_id: document_id.to_string(),
             })?;
-        Ok(index.index.read_lines(start, count))
+        index.index.read_lines(start, count)
     }
 
     pub fn contains(&self, document_id: &str) -> bool {
@@ -100,6 +106,7 @@ impl StreamDocuments {
                 document_id: document_id.to_string(),
             })?;
         let previous_size = entry.index.stats(0.0).byte_len;
+        let encoding = entry.index.encoding();
         let path = entry.path.clone();
         let extended = entry.index.extend()?;
         drop(entry);
@@ -107,7 +114,7 @@ impl StreamDocuments {
         let (index, truncated) = match extended {
             Some(index) if index.stats(0.0).byte_len == previous_size => return Ok(None),
             Some(index) => (index, false),
-            None => (LineIndex::open(&path)?, true),
+            None => (LineIndex::open_with_encoding(&path, encoding)?, true),
         };
 
         let refresh = StreamRefresh {
@@ -149,7 +156,7 @@ mod tests {
         let streams = StreamDocuments::default();
 
         let info = streams
-            .open("stream-1".into(), file.path())
+            .open("stream-1".into(), file.path(), EncodingLabel::Utf8)
             .expect("open index");
         assert_eq!(info.line_count, 3);
         assert_eq!(info.max_line_len, 1);

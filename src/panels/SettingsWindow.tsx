@@ -26,7 +26,6 @@ import {
   type SettingsGroup,
 } from "../lib/settingsSchema";
 import { SettingsField } from "./SettingsField";
-import { GestureBindings } from "./GestureBindings";
 import { ExternalToolsEditor } from "./ExternalToolsEditor";
 import { AboutSection } from "./AboutSection";
 import { UpdateProxyField } from "./UpdateProxyField";
@@ -67,11 +66,10 @@ export function SettingsWindow({
     () => groupSettingsByGroup(matches),
     [matches],
   );
-  // 手势与外部工具不是标量设置项，各自有一段自绘 UI；分组里没有别的项时也要显示
+  // 外部工具等不是标量设置项，各自有一段自绘 UI；分组里没有别的项时也要显示
   const hasCustomSection =
     !searching &&
-    (group === "gestures" ||
-      group === "tools" ||
+    (group === "tools" ||
       group === "shortcuts" ||
       group === "updates" ||
       group === "general" ||
@@ -206,15 +204,6 @@ export function SettingsWindow({
                       onConfirm={confirm}
                     />
                   ))}
-                  {/* 手势绑定不是一个标量设置项，单独渲染在该分组末尾 */}
-                  {group === "gestures" && (
-                    <div className="py-[var(--space-2)]">
-                      <GestureBindings
-                        overrides={config.mouseGestures}
-                        onChange={(next) => onPatch({ mouseGestures: next })}
-                      />
-                    </div>
-                  )}
                   {group === "shortcuts" && <ShortcutSettings />}
                   {group === "tools" && (
                     <div className="py-[var(--space-2)]">

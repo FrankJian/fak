@@ -9,7 +9,8 @@ export type SyntaxKey =
   | 'rust'
   | 'python'
   | 'json'
-  | 'markdown';
+  | 'markdown'
+  | 'bash';
 
 export function syntaxKeyFromFileName(fileName: string): SyntaxKey | null {
   const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
@@ -36,6 +37,9 @@ export function syntaxKeyFromFileName(fileName: string): SyntaxKey | null {
     case 'md':
     case 'markdown':
       return 'markdown';
+    case 'sh':
+    case 'bash':
+      return 'bash';
     default:
       return null;
   }

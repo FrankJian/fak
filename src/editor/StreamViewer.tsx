@@ -4,7 +4,14 @@
  * 跟随模式（SPEC F16）与「跳到行 / 百分比」都挂在这里：它们要动的是同一个
  * 滚动容器，拆到别处就得把 ref 传来传去。
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import type { DocumentMeta } from "../ipc/documents";
 import { readLines } from "../ipc/documents";
 import { useTranslation } from "../i18n/useTranslation";
@@ -15,17 +22,26 @@ import { useStreamFind } from "./useStreamFind";
 import { Minimap } from "./Minimap";
 import { useAppStore } from "../store/appStore";
 import { BOTTOM_SLACK_PX, useTailFollow } from "./useTailFollow";
+import { StreamReplaceDialog } from "../panels/StreamReplaceDialog";
 
 const LINE_HEIGHT = 20;
 const OVERSCAN = 120;
 const CACHE_LIMIT = 2_000;
 
+export interface StreamViewerHandle {
+  revealLine: (line: number) => void;
+  openFind: () => void;
+  openReplace: () => void;
+}
+
 export function StreamViewer({
   meta,
   onPromote,
+  handleRef,
 }: {
   meta: DocumentMeta;
   onPromote: () => void;
+  handleRef?: RefObject<StreamViewerHandle | null>;
 }) {
   const { t } = useTranslation();
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -138,20 +154,20 @@ export function StreamViewer({
     onReveal: revealLine,
   });
   const [findOpen, setFindOpen] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
   const currentMatch = find.current >= 0 ? find.matches[find.current] : null;
   const minimapOn = useAppStore((state) => state.minimap);
   const minimapAutohide = useAppStore((state) => state.minimapAutohide);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        setFindOpen(true);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      revealLine,
+      openFind: () => setFindOpen(true),
+      openReplace: () => setReplaceOpen(true),
+    }),
+    [revealLine],
+  );
 
   const rows = [];
   for (let line = range.start; line < range.end; line += 1) {
@@ -203,6 +219,15 @@ export function StreamViewer({
               setFindOpen(false);
             },
           }}
+          onReplaceToCopy={() => setReplaceOpen(true)}
+        />
+      )}
+      {replaceOpen && (
+        <StreamReplaceDialog
+          documentId={meta.documentId}
+          initialQuery={find.query}
+          initialOptions={find.options}
+          onClose={() => setReplaceOpen(false)}
         />
       )}
       <div className="flex min-h-0 flex-1">

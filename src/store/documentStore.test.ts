@@ -70,6 +70,31 @@ describe("setFoldedLines", () => {
   });
 });
 
+describe("updateLocation", () => {
+  it("switches the tab metadata and full path together after Save As", () => {
+    useDocumentStore.setState({
+      tabs: [
+        {
+          ...tab("a", 1),
+          path: "/work/source.json",
+          meta: { documentId: "a", fileName: "source.json" } as DocumentMeta,
+        },
+      ],
+      activeId: "a",
+    });
+
+    useDocumentStore.getState().updateLocation(
+      { documentId: "a", fileName: "copy.json" } as DocumentMeta,
+      "/work/copy.json",
+    );
+
+    expect(useDocumentStore.getState().tabs[0]).toMatchObject({
+      path: "/work/copy.json",
+      meta: { fileName: "copy.json" },
+    });
+  });
+});
+
 describe("mostRecentlyUsed", () => {
   it("skips the active tab and picks the most recent of the rest", () => {
     const tabs = [tab("a", 10), tab("b", 30), tab("c", 20)];

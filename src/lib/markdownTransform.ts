@@ -85,17 +85,31 @@ function lineEdit(
   const lineStart = text.lastIndexOf("\n", Math.max(selection.from - 1, 0)) + 1;
   const lineEndAtSelection = text.indexOf("\n", selection.to);
   const lineEnd = lineEndAtSelection === -1 ? text.length : lineEndAtSelection;
-  const source = text.slice(lineStart, lineEnd) || placeholder;
+  const original = text.slice(lineStart, lineEnd);
+  const usesPlaceholder = original.length === 0;
+  const source = original || placeholder;
   const lines = source.split("\n");
   const allPrefixed = lines.every((line) => line.startsWith(prefix));
   const next = allPrefixed
     ? lines.map((line) => line.slice(prefix.length)).join("\n")
     : lines.map((line) => `${prefix}${line}`).join("\n");
+  let nextSelection = { from: lineStart, to: lineStart + next.length };
+  if (usesPlaceholder && !allPrefixed) {
+    nextSelection = {
+      from: lineStart + prefix.length,
+      to: lineStart + prefix.length + placeholder.length,
+    };
+  } else if (selection.from === selection.to) {
+    const cursor = allPrefixed
+      ? Math.max(lineStart, selection.from - prefix.length)
+      : selection.from + prefix.length;
+    nextSelection = { from: cursor, to: cursor };
+  }
   return {
     from: lineStart,
     to: lineEnd,
     insert: next,
-    selection: { from: lineStart, to: lineStart + next.length },
+    selection: nextSelection,
   };
 }
 

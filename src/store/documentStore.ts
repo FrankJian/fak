@@ -36,6 +36,8 @@ interface DocumentState {
   activeId: string | null;
   addTab: (meta: DocumentMeta, path?: string | null) => void;
   updateMeta: (meta: DocumentMeta) => void;
+  /** 另存为成功后，元数据与完整路径必须原子切换到新文件。 */
+  updateLocation: (meta: DocumentMeta, path: string) => void;
   renamePaths: (source: string, destination: string) => void;
   setViewportAnchor: (documentId: string, anchor: ViewportAnchor) => void;
   setFoldedLines: (documentId: string, lines: readonly number[]) => void;
@@ -114,6 +116,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((tab) =>
         tab.meta.documentId === meta.documentId ? { ...tab, meta } : tab,
+      ),
+    })),
+
+  updateLocation: (meta, path) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.meta.documentId === meta.documentId ? { ...tab, meta, path } : tab,
       ),
     })),
 

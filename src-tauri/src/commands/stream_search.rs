@@ -104,7 +104,7 @@ pub async fn stream_search_start(
     }
 
     let scan_token = token.clone();
-    let (matches, truncated) = tauri::async_runtime::spawn_blocking(move || {
+    let (matches, truncated) = tauri::async_runtime::spawn_blocking(move || -> AppResult<_> {
         let mut matches: Vec<StreamMatch> = Vec::new();
         let mut truncated = false;
         index.for_each_line(0, |line_number, line| {
@@ -124,11 +124,11 @@ pub async fn stream_search_start(
                 });
             }
             true
-        });
-        (matches, truncated)
+        })?;
+        Ok((matches, truncated))
     })
     .await
-    .map_err(|_| AppError::Io { os_code: None })?;
+    .map_err(|_| AppError::Io { os_code: None })??;
 
     searches.running.remove(&args.document_id);
     if token.is_cancelled() {
