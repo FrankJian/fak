@@ -64,6 +64,14 @@ pub fn spawn(app: tauri::AppHandle, directory: &Path) -> Option<ConfigWatcher> {
 }
 
 fn emit(app: &tauri::AppHandle, reloaded: ConfigReloaded) {
+    if reloaded
+        .changed_keys
+        .iter()
+        .any(|key| key == "language" || key == "quickAccessBarVisible")
+        && crate::native_menu::install_on_handle(app, &reloaded.config).is_err()
+    {
+        log::warn!("外部配置修改后的系统菜单同步失败");
+    }
     if app.emit(CONFIG_RELOADED_EVENT, reloaded).is_err() {
         log::warn!("配置热重载事件发送失败");
     }

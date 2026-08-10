@@ -17,6 +17,7 @@ pub mod line_ending;
 pub mod line_index;
 pub mod logging;
 pub mod markdown;
+pub mod native_menu;
 pub mod outline;
 pub mod path_search;
 pub mod paths;
@@ -83,9 +84,14 @@ pub fn run() {
 
             // 与 Builder 之前那次读取走同一个函数，杜绝两处路径逻辑分叉
             let _ = std::fs::create_dir_all(&config_dir);
-            app.manage(commands::config::ConfigStore::load(
-                config_dir.join(config::CONFIG_FILE),
-            ));
+            let config_store =
+                commands::config::ConfigStore::load(config_dir.join(config::CONFIG_FILE));
+            if let Ok(snapshot) = config_store.snapshot() {
+                if native_menu::install_on_handle(app.handle(), &snapshot.config).is_err() {
+                    log::warn!("系统菜单初始化失败");
+                }
+            }
+            app.manage(config_store);
             if let Some(watcher) = config_watch::spawn(app.handle().clone(), &config_dir) {
                 // watcher 被 drop 就等于静默关掉热重载，所以要挂在 app 上活着
                 app.manage(watcher);
@@ -124,6 +130,7 @@ pub fn run() {
             ));
             Ok(())
         })
+        .on_menu_event(|app, event| native_menu::emit_action(app, event.id()))
         .manage(state::AppState::default())
         .manage(commands::workspace::WorkspaceWatchers::default())
         .manage(std::sync::Arc::new(stream::StreamDocuments::default()))

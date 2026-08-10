@@ -1,5 +1,5 @@
 /**
- * 工具栏（SPEC §5.2）。全部图标按钮——每个都同时具备 tooltip、`aria-label`
+ * 快捷栏（SPEC §5.2 的图标工具栏）。每个按钮都同时具备 tooltip、`aria-label`
  * 与命令面板条目（SPEC §6.6.2 的三项补偿，缺一不可）。
  */
 import { IconButton } from '../design/components/IconButton';
@@ -48,6 +48,8 @@ export function Toolbar({
 
   return (
     <div
+      role="toolbar"
+      aria-label={t('quickAccessBar.label')}
       className="flex shrink-0 items-center gap-0.5 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2"
       style={{ height: 'var(--h-toolbar)' }}
     >

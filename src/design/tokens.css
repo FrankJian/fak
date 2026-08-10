@@ -138,6 +138,8 @@
 
   /* 小地图只画标记与行长条、不渲染文本，因此比 VS Code 的窄得多（SPEC §181） */
   --w-minimap: calc(64px * var(--density));
+  /* 小地图贴在滚动条左侧时，两者必须共用同一份宽度事实。 */
+  --w-scrollbar: 10px;
   --switch-knob: calc(10px * var(--density));
 
   --radius-badge: 2px;

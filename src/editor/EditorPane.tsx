@@ -192,26 +192,32 @@ export function EditorPane({
           />
           <div
             ref={containerRef}
-            className="h-full overflow-hidden"
+            className={
+              minimapOn
+                ? "editor-with-minimap h-full overflow-hidden"
+                : "h-full overflow-hidden"
+            }
             onContextMenu={onContextMenu}
           />
           <SearchOverviewRuler
             matches={searchPositions}
             documentLength={searchOverviewLength}
           />
+          {minimapOn && (
+            <Minimap
+              totalLines={meta.lineCount}
+              topLine={topLine}
+              visibleLines={visibleLines}
+              density={density}
+              matches={searchPositions}
+              changes={changeMarks}
+              autohide={minimapAutohide}
+              onSeek={(line) =>
+                handleRef.current?.revealLineColumn(line + 1, 1)
+              }
+            />
+          )}
         </div>
-        {minimapOn && (
-          <Minimap
-            totalLines={meta.lineCount}
-            topLine={topLine}
-            visibleLines={visibleLines}
-            density={density}
-            matches={searchPositions}
-            changes={changeMarks}
-            autohide={minimapAutohide}
-            onSeek={(line) => handleRef.current?.revealLineColumn(line + 1, 1)}
-          />
-        )}
       </div>
     </div>
   );

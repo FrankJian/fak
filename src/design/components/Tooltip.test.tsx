@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
-import { Tooltip, TOOLTIP_DELAY_MS, formatTooltipText } from './Tooltip';
+import {
+  Tooltip,
+  TOOLTIP_DELAY_MS,
+  formatTooltipText,
+  positionTooltip,
+} from './Tooltip';
 
 describe('formatTooltipText', () => {
   it('只有名称时原样返回', () => {
@@ -13,6 +18,42 @@ describe('formatTooltipText', () => {
 
   it('空字符串快捷键视为没有快捷键', () => {
     expect(formatTooltipText('保存', '')).toBe('保存');
+  });
+});
+
+describe('positionTooltip', () => {
+  const anchor = {
+    left: 1160,
+    top: 40,
+    right: 1186,
+    bottom: 66,
+    width: 26,
+    height: 26,
+  };
+
+  it('clamps a tooltip beside the rightmost toolbar icon into the viewport', () => {
+    const position = positionTooltip(
+      anchor,
+      { width: 180, height: 28 },
+      'bottom',
+      { width: 1200, height: 800 },
+    );
+
+    expect(position.left).toBe(1012);
+    expect(position.left + 180).toBeLessThanOrEqual(1192);
+  });
+
+  it('clamps the left edge and flips above when there is no room below', () => {
+    const position = positionTooltip(
+      { ...anchor, left: 0, right: 26, top: 760, bottom: 786 },
+      { width: 180, height: 28 },
+      'bottom',
+      { width: 1200, height: 800 },
+    );
+
+    expect(position.left).toBe(8);
+    expect(position.placement).toBe('top');
+    expect(position.top).toBe(726);
   });
 });
 

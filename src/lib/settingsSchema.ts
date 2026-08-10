@@ -316,6 +316,7 @@ export const SETTINGS: readonly SettingDescriptor[] = [
   ]),
   RULERS,
   toggle("appearance", "stickyScroll"),
+  toggle("appearance", "quickAccessBarVisible"),
   toggle("appearance", "minimap"),
   toggle("appearance", "minimapAutohide"),
   toggle("appearance", "breadcrumbs"),

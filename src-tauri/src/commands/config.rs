@@ -133,8 +133,15 @@ pub struct WriteConfigArgs {
 pub fn write_config(
     args: WriteConfigArgs,
     store: tauri::State<'_, ConfigStore>,
+    app: tauri::AppHandle,
 ) -> AppResult<Config> {
-    store.apply_patch(&args.patch)
+    let refresh_native_menu =
+        args.patch.contains_key("language") || args.patch.contains_key("quickAccessBarVisible");
+    let config = store.apply_patch(&args.patch)?;
+    if refresh_native_menu && crate::native_menu::install_on_handle(&app, &config).is_err() {
+        log::warn!("系统菜单同步失败");
+    }
+    Ok(config)
 }
 
 /// 「以文件方式打开配置」需要它（SPEC 9.3 第 8 条）。

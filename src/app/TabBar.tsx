@@ -11,6 +11,7 @@ import { IconButton } from "../design/components/IconButton";
 import { useTranslation } from "../i18n/useTranslation";
 import type { Tab } from "../store/documentStore";
 import type { DiffTab } from "../store/diffStore";
+import { TabContextMenu } from "./TabContextMenu";
 
 interface TabBarProps {
   tabs: Tab[];
@@ -88,12 +89,6 @@ export function TabBar({
     observer.observe(element);
     return () => observer.disconnect();
   }, [tabs, diffTabs]);
-
-  useEffect(() => {
-    const dismiss = () => setMenu(null);
-    window.addEventListener("pointerdown", dismiss);
-    return () => window.removeEventListener("pointerdown", dismiss);
-  }, []);
 
   if (tabs.length === 0 && diffTabs.length === 0) return null;
 
@@ -256,76 +251,28 @@ export function TabBar({
         />
       )}
       {menu && (
-        <div
-          role="menu"
-          className="fixed z-50 min-w-44 border border-[var(--border-default)] bg-[var(--bg-surface)] py-[var(--space-1)] shadow-[var(--shadow-popover)]"
-          style={{ left: menu.x, top: menu.y }}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={() => setMenu(null)}
-        >
-          <TabMenuItem
-            onSelect={() => onToggleLock(menu.documentId)}
-            label={
-              tabs.find((tab) => tab.meta.documentId === menu.documentId)
-                ?.locked
-                ? t("tab.unlock")
-                : t("tab.lock")
-            }
-          />
-          <div className="my-[var(--space-1)] border-t border-[var(--border-subtle)]" />
-          <TabMenuItem
-            onSelect={() => onCloseOthers(menu.documentId)}
-            label={t("tab.closeOthers")}
-          />
-          <TabMenuItem
-            onSelect={() => onCloseToRight(menu.documentId)}
-            label={t("tab.closeToRight")}
-          />
-          <TabMenuItem
-            onSelect={() => onCopyPath(menu.documentId)}
-            label={t("tab.copyPath")}
-          />
-          <TabMenuItem
-            onSelect={() => onRevealInFileManager(menu.documentId)}
-            label={t("tab.revealInFileManager")}
-          />
-          <div className="my-[var(--space-1)] border-t border-[var(--border-subtle)]" />
-          <TabMenuItem
-            onSelect={() => onSetCompareSource(menu.documentId)}
-            label={t("diff.setSource")}
-          />
-          <TabMenuItem
-            disabled={
-              compareSourceId === null || compareSourceId === menu.documentId
-            }
-            onSelect={() => onCompareWithSource(menu.documentId)}
-            label={t("diff.compareWithSource")}
-          />
-        </div>
+        <TabContextMenu
+          x={menu.x}
+          y={menu.y}
+          locked={
+            tabs.find((tab) => tab.meta.documentId === menu.documentId)
+              ?.locked ?? false
+          }
+          compareDisabled={
+            compareSourceId === null || compareSourceId === menu.documentId
+          }
+          onToggleLock={() => onToggleLock(menu.documentId)}
+          onCloseOthers={() => onCloseOthers(menu.documentId)}
+          onCloseToRight={() => onCloseToRight(menu.documentId)}
+          onCopyPath={() => onCopyPath(menu.documentId)}
+          onRevealInFileManager={() =>
+            onRevealInFileManager(menu.documentId)
+          }
+          onSetCompareSource={() => onSetCompareSource(menu.documentId)}
+          onCompareWithSource={() => onCompareWithSource(menu.documentId)}
+          onClose={() => setMenu(null)}
+        />
       )}
     </div>
-  );
-}
-
-function TabMenuItem({
-  label,
-  onSelect,
-  disabled = false,
-}: {
-  label: string;
-  onSelect: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      disabled={disabled}
-      className="flex w-full px-[var(--space-3)] py-[var(--space-1)] text-left text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:text-[var(--text-disabled)]"
-      style={{ fontSize: "var(--font-size-small)" }}
-      onClick={onSelect}
-    >
-      {label}
-    </button>
   );
 }

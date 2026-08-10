@@ -49,6 +49,7 @@ export interface PanelActions {
   openSettings: (group?: SettingsGroup) => void;
   checkForUpdates: () => void;
   toggleMarkdownPreview: () => void;
+  toggleQuickAccessBar: () => void;
   formatMarkdown: (format: MarkdownFormat) => void;
   toggleOutlinePanel: () => void;
   toggleFilterPanel: () => void;
@@ -646,6 +647,14 @@ export function registerWorkspaceActions(
     icon: "commandPalette",
     shortcut: "Ctrl+Shift+P",
     run: () => panels.openCommandPalette(),
+  });
+
+  registerAction({
+    id: "view.quickAccessBar",
+    titleKey: "quickAccessBar.toggle",
+    categoryKey: "category.view",
+    icon: "menu",
+    run: () => panels.toggleQuickAccessBar(),
   });
 
   registerAction({

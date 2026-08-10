@@ -43,6 +43,9 @@ export const zhCN = {
   "titleBar.alwaysOnTop": "窗口置顶",
   "titleBar.settings": "设置",
 
+  "quickAccessBar.label": "快捷栏",
+  "quickAccessBar.toggle": "显示或隐藏快捷栏",
+
   "toolbar.newFile": "新建文件",
   "toolbar.openFile": "打开文件",
   "toolbar.openFolder": "打开文件夹",
@@ -116,6 +119,7 @@ export const zhCN = {
   "recovery.backedUpAt": "备份于 {time}",
 
   "tab.close": "关闭标签页",
+  "tab.contextMenu": "标签页菜单",
   "tab.switchPrevious": "切换到上一个标签页",
   "tab.unsaved": "未保存",
   "tab.untitled": "未命名",
@@ -354,6 +358,9 @@ export const zhCN = {
   "settings.minimap.label": "显示小地图",
   "settings.minimap.description":
     "在编辑区右侧画出全文概览，含未保存变更与查找命中标记。它不渲染真实文本，所以大文件下也不卡。",
+  "settings.quickAccessBarVisible.label": "显示快捷栏",
+  "settings.quickAccessBarVisible.description":
+    "显示菜单栏下方的新建、打开、保存和撤销等快捷按钮。",
   "settings.minimapAutohide.label": "小地图自动隐藏",
   "settings.minimapAutohide.description": "只在鼠标悬停在小地图上时显示。",
   "settings.singleInstance.label": "只允许一个实例",

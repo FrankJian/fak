@@ -46,6 +46,9 @@ export const enUS: Record<MessageKey, string> = {
   "titleBar.alwaysOnTop": "Always on top",
   "titleBar.settings": "Settings",
 
+  "quickAccessBar.label": "Quick access bar",
+  "quickAccessBar.toggle": "Show or hide quick access bar",
+
   "toolbar.newFile": "New file",
   "toolbar.openFile": "Open file",
   "toolbar.openFolder": "Open folder",
@@ -121,6 +124,7 @@ export const enUS: Record<MessageKey, string> = {
   "recovery.backedUpAt": "Backed up at {time}",
 
   "tab.close": "Close tab",
+  "tab.contextMenu": "Tab menu",
   "tab.switchPrevious": "Switch to previous tab",
   "tab.unsaved": "Unsaved",
   "tab.untitled": "Untitled",
@@ -375,6 +379,9 @@ export const enUS: Record<MessageKey, string> = {
   "settings.minimap.label": "Show minimap",
   "settings.minimap.description":
     "Draws a whole-file overview on the right, including unsaved changes and search hits. It does not render real text, so it stays fast on large files.",
+  "settings.quickAccessBarVisible.label": "Show quick access bar",
+  "settings.quickAccessBarVisible.description":
+    "Show the New, Open, Save, and Undo shortcut buttons below the menu bar.",
   "settings.minimapAutohide.label": "Auto-hide minimap",
   "settings.minimapAutohide.description":
     "Only show it while the pointer is over the minimap.",

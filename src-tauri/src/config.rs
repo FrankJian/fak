@@ -243,6 +243,8 @@ pub struct Config {
     /// 小地图（SPEC §4.1 能力表）。自动隐藏时只在鼠标悬停在编辑区时显示
     pub minimap: bool,
     pub minimap_autohide: bool,
+    /// 菜单栏始终显示；这里只控制图标快捷栏，保证隐藏后仍有恢复入口
+    pub quick_access_bar_visible: bool,
     /// 单实例（SPEC §12.5）。改后需重启生效：插件在 Builder 之前就要决定装不装
     pub single_instance: bool,
     /// 命名过滤规则组（SPEC F4.7），重启后仍可用
@@ -304,6 +306,7 @@ impl Default for Config {
             skipped_version: String::new(),
             minimap: true,
             minimap_autohide: true,
+            quick_access_bar_visible: true,
             single_instance: true,
             filter_rule_groups: Vec::new(),
             file_tree_width: 260,
@@ -454,6 +457,8 @@ pub fn from_map(map: &Map<String, Value>) -> Parsed {
         skipped_version: reader.get("skippedVersion", defaults.skipped_version),
         minimap: reader.get("minimap", defaults.minimap),
         minimap_autohide: reader.get("minimapAutohide", defaults.minimap_autohide),
+        quick_access_bar_visible: reader
+            .get("quickAccessBarVisible", defaults.quick_access_bar_visible),
         single_instance: reader.get("singleInstance", defaults.single_instance),
         filter_rule_groups: reader.get("filterRuleGroups", defaults.filter_rule_groups),
         file_tree_width: reader.get_clamped("fileTreeWidth", defaults.file_tree_width, 160, 600),
@@ -623,6 +628,13 @@ mod tests {
         let config = from_map(&map_of(r#"{ "findReverse": true }"#)).config;
 
         assert!(config.find_reverse);
+    }
+
+    #[test]
+    fn quick_access_bar_visibility_is_read_as_a_boolean_setting() {
+        let config = from_map(&map_of(r#"{ "quickAccessBarVisible": false }"#)).config;
+
+        assert!(!config.quick_access_bar_visible);
     }
 
     #[test]

@@ -102,34 +102,40 @@ export function Minimap({
   const visible = !autohide || hovered || dragging;
 
   return (
-    <canvas
-      ref={canvasRef}
-      role="slider"
-      tabIndex={-1}
-      aria-label={t("minimap.label")}
-      aria-valuemin={0}
-      aria-valuemax={Math.max(0, totalLines - 1)}
-      aria-valuenow={topLine}
-      className="h-full shrink-0 cursor-pointer transition-opacity"
+    <div
+      className="absolute bottom-0 right-[var(--w-scrollbar)] top-0 z-20 h-full bg-[var(--bg-base)]"
       style={{
         width: "var(--w-minimap)",
-        opacity: visible ? 1 : 0,
-        transitionDuration: "var(--duration-fast)",
       }}
-      onPointerEnter={() => setHovered(true)}
-      onPointerLeave={() => setHovered(false)}
-      onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId);
-        setDragging(true);
-        seekTo(event.clientY);
-      }}
-      onPointerMove={(event) => {
-        if (dragging) seekTo(event.clientY);
-      }}
-      onPointerUp={(event) => {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-        setDragging(false);
-      }}
-    />
+    >
+      <canvas
+        ref={canvasRef}
+        role="slider"
+        tabIndex={-1}
+        aria-label={t("minimap.label")}
+        aria-valuemin={0}
+        aria-valuemax={Math.max(0, totalLines - 1)}
+        aria-valuenow={topLine}
+        className="block h-full w-full cursor-pointer transition-opacity"
+        style={{
+          opacity: visible ? 1 : 0,
+          transitionDuration: "var(--duration-fast)",
+        }}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setDragging(true);
+          seekTo(event.clientY);
+        }}
+        onPointerMove={(event) => {
+          if (dragging) seekTo(event.clientY);
+        }}
+        onPointerUp={(event) => {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          setDragging(false);
+        }}
+      />
+    </div>
   );
 }

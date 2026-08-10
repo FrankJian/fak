@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 /** SPEC 附录 B · TOOLTIP_DELAY */
@@ -6,6 +13,7 @@ export const TOOLTIP_DELAY_MS = 500;
 
 /** 目标与浮层之间的空隙，取 §6.5 间距阶的 6 px */
 const OFFSET_PX = 6;
+const VIEWPORT_EDGE_PX = 8;
 
 export type TooltipPlacement = 'top' | 'bottom';
 
@@ -27,6 +35,62 @@ export function formatTooltipText(label: string, shortcut?: string): string {
 interface Anchor {
   left: number;
   top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+interface TooltipSize {
+  width: number;
+  height: number;
+}
+
+interface TooltipPosition {
+  left: number;
+  top: number;
+  placement: TooltipPlacement;
+}
+
+/** 根据真实浮层尺寸定位，并在首选方向放不下时翻转、在左右边缘夹紧。 */
+export function positionTooltip(
+  anchor: Anchor,
+  tooltip: TooltipSize,
+  preferred: TooltipPlacement,
+  viewport: { width: number; height: number },
+): TooltipPosition {
+  const above = anchor.top - OFFSET_PX - tooltip.height;
+  const below = anchor.bottom + OFFSET_PX;
+  const fitsAbove = above >= VIEWPORT_EDGE_PX;
+  const fitsBelow = below + tooltip.height <= viewport.height - VIEWPORT_EDGE_PX;
+  const placement =
+    preferred === 'top'
+      ? fitsAbove || !fitsBelow
+        ? 'top'
+        : 'bottom'
+      : fitsBelow || !fitsAbove
+        ? 'bottom'
+        : 'top';
+
+  const maxLeft = Math.max(
+    VIEWPORT_EDGE_PX,
+    viewport.width - tooltip.width - VIEWPORT_EDGE_PX,
+  );
+  const maxTop = Math.max(
+    VIEWPORT_EDGE_PX,
+    viewport.height - tooltip.height - VIEWPORT_EDGE_PX,
+  );
+  return {
+    left: Math.min(
+      Math.max(VIEWPORT_EDGE_PX, anchor.left + anchor.width / 2 - tooltip.width / 2),
+      maxLeft,
+    ),
+    top: Math.min(
+      Math.max(VIEWPORT_EDGE_PX, placement === 'top' ? above : below),
+      maxTop,
+    ),
+    placement,
+  };
 }
 
 /**
@@ -43,13 +107,16 @@ export function Tooltip({
   children,
 }: TooltipProps) {
   const anchorRef = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<number | undefined>(undefined);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
+  const [position, setPosition] = useState<TooltipPosition | null>(null);
   const [entered, setEntered] = useState(false);
 
   const hide = useCallback(() => {
     window.clearTimeout(timerRef.current);
     setAnchor(null);
+    setPosition(null);
     setEntered(false);
   }, []);
 
@@ -60,19 +127,37 @@ export function Tooltip({
       const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
       setAnchor({
-        left: rect.left + rect.width / 2,
-        top: placement === 'top' ? rect.top - OFFSET_PX : rect.bottom + OFFSET_PX,
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
       });
     }, delayMs);
-  }, [delayMs, disabled, placement]);
+  }, [delayMs, disabled]);
 
   useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
+  useLayoutEffect(() => {
+    const tooltip = tooltipRef.current;
+    if (!anchor || !tooltip) return;
+    const bounds = tooltip.getBoundingClientRect();
+    setPosition(
+      positionTooltip(
+        anchor,
+        { width: bounds.width, height: bounds.height },
+        placement,
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
+    );
+  }, [anchor, placement]);
+
   useEffect(() => {
-    if (!anchor) return;
+    if (!position) return;
     const frame = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(frame);
-  }, [anchor]);
+  }, [position]);
 
   useEffect(() => {
     if (!anchor) return;
@@ -81,14 +166,21 @@ export function Tooltip({
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
     };
   }, [anchor, hide]);
 
   const text = formatTooltipText(label, shortcut);
-  const shift = entered ? '0' : '-2px';
+  const resolvedPlacement = position?.placement ?? placement;
+  const shift = entered
+    ? 'translateY(0)'
+    : resolvedPlacement === 'top'
+      ? 'translateY(2px)'
+      : 'translateY(-2px)';
 
   return (
     <>
@@ -107,18 +199,18 @@ export function Tooltip({
       {anchor !== null &&
         createPortal(
           <div
+            ref={tooltipRef}
             role="tooltip"
             className="pointer-events-none fixed z-50 max-w-[280px] whitespace-pre rounded-[var(--radius-control)] border border-[var(--border-default)] bg-[var(--bg-raised)] px-[var(--space-2)] py-[2px] text-[var(--text-primary)] shadow-[var(--shadow-popover)]"
             style={{
-              left: anchor.left,
-              top: anchor.top,
+              left: position?.left ?? 0,
+              top: position?.top ?? 0,
+              maxWidth: 'min(280px, calc(100vw - 16px))',
+              visibility: position ? 'visible' : 'hidden',
               fontSize: 'var(--font-size-small)',
               lineHeight: 'var(--line-height-ui)',
               opacity: entered ? 1 : 0,
-              transform:
-                placement === 'top'
-                  ? `translate(-50%, -100%) translateY(${shift})`
-                  : `translate(-50%, 0) translateY(${shift})`,
+              transform: shift,
               transition: `opacity var(--duration-popover) var(--ease-standard), transform var(--duration-popover) var(--ease-standard)`,
             }}
           >

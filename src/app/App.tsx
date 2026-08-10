@@ -53,6 +53,7 @@ import { RecoveryBar } from "../panels/RecoveryBar";
 import { SaveConflictDialog } from "../panels/SaveConflictDialog";
 import { PromoteStreamDialog } from "../panels/PromoteStreamDialog";
 import { configFilePath } from "../ipc/config";
+import { onNativeMenuAction } from "../ipc/nativeMenu";
 import { openBackupDiff } from "../ipc/backup";
 import { copyToClipboard, readFromClipboard } from "../ipc/clipboard";
 import { pickFolderToOpen } from "../ipc/dialog";
@@ -121,6 +122,10 @@ export function App() {
   const recentFiles = useAppStore((state) => state.recentFiles);
   const configHydrated = useAppStore((state) => state.hydrated);
   const shortcutOverrides = useAppStore((state) => state.shortcutOverrides);
+  const quickAccessBarVisible = useAppStore(
+    (state) => state.quickAccessBarVisible,
+  );
+  const patchConfig = useAppStore((state) => state.patchConfig);
   const tabWidth = useAppStore((state) => state.tabWidth);
   const tabIndentMode = useAppStore((state) => state.tabIndentMode);
   const configuredTools = useAppStore((state) => state.externalTools);
@@ -464,6 +469,20 @@ export function App() {
       activeDiff,
     ],
   );
+  const actionContextRef = useRef(actionContext);
+  useEffect(() => {
+    actionContextRef.current = actionContext;
+  });
+
+  useEffect(
+    () =>
+      onNativeMenuAction((actionId) => {
+        const action = getAction(actionId);
+        const current = actionContextRef.current;
+        if (action && isEnabled(action, current)) void action.run(current);
+      }),
+    [],
+  );
 
   // 菜单条目一律从注册表取，禁用态复用动作自己的 `when`——
   // 菜单与命令面板各判一次的话，两边迟早会对不上（SPEC F14）
@@ -622,6 +641,10 @@ export function App() {
     confirmInstall,
   });
   const checkForUpdatesNow = update.checkNow;
+  const toggleQuickAccessBar = useCallback(() => {
+    const current = useAppStore.getState().quickAccessBarVisible;
+    patchConfig({ quickAccessBarVisible: !current });
+  }, [patchConfig]);
 
   const saveDirtyThenInstall = useCallback(() => {
     const resolve = installConfirm;
@@ -773,6 +796,7 @@ export function App() {
         openSettings: (group = "general") => setSettingsGroup(group),
         checkForUpdates: () => checkForUpdatesNow(),
         toggleMarkdownPreview,
+        toggleQuickAccessBar,
         formatMarkdown,
         refreshOutline: outline.refresh,
         expandOutline: outline.expandAll,
@@ -817,6 +841,7 @@ export function App() {
     openFolder,
     fileTree,
     toggleMarkdownPreview,
+    toggleQuickAccessBar,
     formatMarkdown,
     textTools,
     shortcutOverrides,
@@ -861,26 +886,30 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col bg-[var(--bg-base)]">
-      <Toolbar
-        onNew={() => void workspace.createNew()}
-        onOpen={() => void workspace.openPath()}
-        onOpenFolder={() => void openFolder()}
-        onSave={() => void workspace.save()}
-        onSaveAs={() => void workspace.saveAs()}
-        onUndo={() => void workspace.undo()}
-        onRedo={() => void workspace.redo()}
-        onOpenCommandPalette={() => setOverlay("commandPalette")}
-        onToggleMarkdownPreview={toggleMarkdownPreview}
-        canSave={Boolean(activeTab) && !resyncing}
-        canSaveAs={
-          Boolean(activeTab) && activeTab?.meta.mode !== "stream" && !resyncing
-        }
-        canEdit={Boolean(activeTab) && !resyncing}
-        canPreviewMarkdown={canPreviewMarkdown}
-        markdownPreviewVisible={
-          canPreviewMarkdown && markdownPreviewMode !== "hidden"
-        }
-      />
+      {quickAccessBarVisible && (
+        <Toolbar
+          onNew={() => void workspace.createNew()}
+          onOpen={() => void workspace.openPath()}
+          onOpenFolder={() => void openFolder()}
+          onSave={() => void workspace.save()}
+          onSaveAs={() => void workspace.saveAs()}
+          onUndo={() => void workspace.undo()}
+          onRedo={() => void workspace.redo()}
+          onOpenCommandPalette={() => setOverlay("commandPalette")}
+          onToggleMarkdownPreview={toggleMarkdownPreview}
+          canSave={Boolean(activeTab) && !resyncing}
+          canSaveAs={
+            Boolean(activeTab) &&
+            activeTab?.meta.mode !== "stream" &&
+            !resyncing
+          }
+          canEdit={Boolean(activeTab) && !resyncing}
+          canPreviewMarkdown={canPreviewMarkdown}
+          markdownPreviewVisible={
+            canPreviewMarkdown && markdownPreviewMode !== "hidden"
+          }
+        />
+      )}
       {canPreviewMarkdown && <MarkdownToolbar onFormat={formatMarkdown} />}
 
       <TabBar

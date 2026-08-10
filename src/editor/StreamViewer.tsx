@@ -230,10 +230,14 @@ export function StreamViewer({
           onClose={() => setReplaceOpen(false)}
         />
       )}
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <div
           ref={viewportRef}
-          className="min-h-0 min-w-0 flex-1 overflow-auto"
+          className={
+            minimapOn
+              ? "min-h-0 min-w-0 flex-1 overflow-auto pr-[var(--w-minimap)]"
+              : "min-h-0 min-w-0 flex-1 overflow-auto"
+          }
           aria-label={t("stream.content")}
           onScroll={() => {
             updateRange();

@@ -78,8 +78,8 @@ select:disabled,
 
 /* SPEC §6.9 滚动条 */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: var(--w-scrollbar);
+  height: var(--w-scrollbar);
 }
 
 ::-webkit-scrollbar-track {
@@ -104,6 +104,12 @@ select:disabled,
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* CodeMirror 自己持有滚动容器。小地图覆盖在容器右侧预留区，原生竖向滚动条
+   因而仍留在最右边，视觉顺序是“正文 → 小地图 → 滚动条”。 */
+.editor-with-minimap .cm-scroller {
+  padding-right: var(--w-minimap);
 }
 
 /* 语法高亮（SPEC §6.3.5）。区间由 Rust 的 tree-sitter 产出（ADR-05），

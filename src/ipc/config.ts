@@ -108,6 +108,8 @@ export interface Config {
   /** 小地图（SPEC §4.1 能力表） */
   minimap: boolean;
   minimapAutohide: boolean;
+  /** 顶部快捷栏是否显示。菜单栏始终保留，避免隐藏后失去恢复入口 */
+  quickAccessBarVisible: boolean;
   /** 单实例（SPEC §12.5）。改后需重启生效 */
   singleInstance: boolean;
   updateProxyServer: string;
@@ -190,6 +192,7 @@ export const DEFAULT_CONFIG: Config = {
   pasteImageMode: "assetFile",
   minimap: true,
   minimapAutohide: true,
+  quickAccessBarVisible: true,
   singleInstance: true,
   updateProxyServer: "",
   updateIgnoreSystemProxy: false,
