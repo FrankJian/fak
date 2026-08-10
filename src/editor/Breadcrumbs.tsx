@@ -23,6 +23,8 @@ const MENU_WIDTH = 260;
 
 interface BreadcrumbsProps {
   fileName: string;
+  /** 完整磁盘路径；未命名文档或旧会话拿不到路径时回退到 fileName。 */
+  filePath: string | null;
   chain: readonly OutlineNode[];
   onPick: (node: OutlineNode) => void;
   /** 同级符号列表（SPEC F3.2）。取不到时退回直接跳转 */
@@ -36,6 +38,7 @@ interface Menu {
 
 export function Breadcrumbs({
   fileName,
+  filePath,
   chain,
   onPick,
   loadSiblings,
@@ -44,6 +47,7 @@ export function Breadcrumbs({
   const [menu, setMenu] = useState<Menu | null>(null);
   // 浮层锚在「刚点的那一节」上，所以锚点是一个可写的 ref，而不是某个固定节点
   const anchorRef = useRef<HTMLElement | null>(null);
+  const fileLabel = filePath || fileName;
 
   const elided = chain.length > MAX_VISIBLE;
   // 留头留尾：头一节交代最外层，尾一节是当前所在
@@ -70,7 +74,13 @@ export function Breadcrumbs({
       className="flex shrink-0 items-center gap-[var(--space-1)] overflow-hidden border-b border-[var(--border-subtle)] px-[var(--space-2)] text-[var(--text-tertiary)]"
       style={{ height: `${HEIGHT}px`, fontSize: "var(--font-size-small)" }}
     >
-      <span className="shrink-0 truncate">{fileName}</span>
+      <span
+        className="shrink-0 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ maxWidth: "50%" }}
+        title={fileLabel}
+      >
+        {fileLabel}
+      </span>
       {shown.map((node, index) => (
         <span
           key={`${node.start}-${node.name}`}

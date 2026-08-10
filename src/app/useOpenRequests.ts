@@ -7,6 +7,7 @@
  */
 import { useEffect } from "react";
 import { listenOpenPaths, takeStartupPaths } from "../ipc/startup";
+import { listenDroppedPaths } from "../ipc/window";
 import { logger } from "../lib/logger";
 
 export function useOpenRequests(open: (path: string) => Promise<void>): void {
@@ -28,19 +29,30 @@ export function useOpenRequests(open: (path: string) => Promise<void>): void {
       .then(openAll)
       .catch((error: unknown) => logger.warn("startup paths failed", error));
 
-    let unlisten: (() => void) | null = null;
+    let unlistenForwarded: (() => void) | null = null;
     void listenOpenPaths((paths) => void openAll(paths))
       .then((off) => {
         if (cancelled) off();
-        else unlisten = off;
+        else unlistenForwarded = off;
       })
       .catch((error: unknown) =>
         logger.warn("open path subscribe failed", error),
       );
 
+    let unlistenDropped: (() => void) | null = null;
+    void listenDroppedPaths((paths) => void openAll(paths))
+      .then((off) => {
+        if (cancelled) off();
+        else unlistenDropped = off;
+      })
+      .catch((error: unknown) =>
+        logger.warn("file drop subscribe failed", error),
+      );
+
     return () => {
       cancelled = true;
-      unlisten?.();
+      unlistenForwarded?.();
+      unlistenDropped?.();
     };
   }, [open]);
 }

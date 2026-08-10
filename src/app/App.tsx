@@ -1099,6 +1099,7 @@ export function App() {
             <EditorPane
               key={activeTab.meta.documentId}
               meta={activeTab.meta}
+              filePath={activeTab.path}
               initialText={workspace.text}
               initialViewportAnchor={activeTab.viewportAnchor}
               initialFoldedLines={activeTab.foldedLines}

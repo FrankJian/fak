@@ -5,6 +5,21 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isTauriAvailable } from './invoke';
 
+/**
+ * 订阅操作系统交给当前窗口的文件拖放。只转发真正的 `drop`，悬停和离开事件
+ * 留给 Tauri 处理，避免一次拖动在前端触发多次打开。
+ */
+export async function listenDroppedPaths(
+  handler: (paths: string[]) => void,
+): Promise<() => void> {
+  if (!isTauriAvailable()) return () => {};
+  return getCurrentWindow().onDragDropEvent((event) => {
+    if (event.payload.type === 'drop' && event.payload.paths.length > 0) {
+      handler(event.payload.paths);
+    }
+  });
+}
+
 export interface WindowControls {
   minimize: () => Promise<void>;
   toggleMaximize: () => Promise<void>;

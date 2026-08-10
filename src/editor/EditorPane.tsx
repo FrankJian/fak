@@ -30,6 +30,7 @@ const MINIMAP_BUCKETS = 2_000;
 
 interface EditorPaneProps {
   meta: DocumentMeta;
+  filePath: string | null;
   initialText: string;
   initialViewportAnchor?: { line: number; topLine: number };
   initialFoldedLines?: readonly number[];
@@ -59,6 +60,7 @@ interface EditorPaneProps {
 
 export function EditorPane({
   meta,
+  filePath,
   initialText,
   initialViewportAnchor,
   initialFoldedLines,
@@ -177,6 +179,7 @@ export function EditorPane({
       {breadcrumbsOn && (
         <Breadcrumbs
           fileName={meta.fileName}
+          filePath={filePath}
           chain={context.breadcrumbs}
           onPick={context.goTo}
           loadSiblings={context.siblingsOf}
