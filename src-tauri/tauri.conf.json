@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Fak",
+        "title": "",
         "width": 1200,
         "height": 780,
         "minWidth": 640,
