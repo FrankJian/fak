@@ -76,8 +76,7 @@ if (!enumBody) {
 // —— 2. 硬编码中文
 const CJK = /[\u4e00-\u9fa5]/;
 const SCAN_EXT = new Set([".ts", ".tsx"]);
-// src/prototypes 是 M0 技术验证的一次性代码，P0-06 完成后整体删除，不走 i18n。
-const WHITELIST_DIRS = [join("src", "i18n"), join("src", "prototypes")];
+const WHITELIST_DIRS = [join("src", "i18n")];
 
 function isWhitelisted(path) {
   const rel = relative(root, path);

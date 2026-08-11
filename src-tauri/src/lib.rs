@@ -27,7 +27,6 @@ pub mod single_instance;
 pub mod state;
 pub mod stream;
 pub mod syntax;
-pub mod syntax_incremental;
 pub mod textops;
 pub mod undo;
 
