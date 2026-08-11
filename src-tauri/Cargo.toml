@@ -1,6 +1,6 @@
 [package]
 name = "fak"
-version = "0.1.1"
+version = "0.1.2"
 description = "Fak text and code editor"
 authors = ["Fak contributors"]
 edition = "2021"

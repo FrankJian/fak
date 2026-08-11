@@ -36,13 +36,23 @@ impl PendingOpenPaths {
         if paths.is_empty() {
             return;
         }
-        if self.taken.load(Ordering::SeqCst) {
+        // Check the taken flag while holding the same lock as the queue. This
+        // closes the race where `take_startup_paths` drains the queue between
+        // the flag check and `extend`, which would otherwise strand the new
+        // paths until the next app launch.
+        let emit_paths = match self.paths.lock() {
+            Ok(mut pending) => {
+                if self.taken.load(Ordering::SeqCst) {
+                    Some(paths)
+                } else {
+                    pending.extend(paths);
+                    None
+                }
+            }
+            Err(_) => Some(paths),
+        };
+        if let Some(paths) = emit_paths {
             emit_open_paths(app, paths);
-            return;
-        }
-        match self.paths.lock() {
-            Ok(mut pending) => pending.extend(paths),
-            Err(_) => emit_open_paths(app, paths),
         }
     }
 }

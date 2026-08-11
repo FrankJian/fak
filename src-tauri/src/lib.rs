@@ -48,8 +48,16 @@ pub fn run() {
             logging::focus_main_window(app);
             let paths = commands::startup::file_arguments(&args);
             // 第二个实例可能在本窗口前端还没就绪时就转发过来，交给它自己判断排队还是发事件
-            tauri::Manager::state::<commands::startup::PendingOpenPaths>(app)
-                .queue_or_emit(app, paths);
+            if let Some(pending) =
+                tauri::Manager::try_state::<commands::startup::PendingOpenPaths>(app)
+            {
+                pending.queue_or_emit(app, paths);
+            } else {
+                log::warn!(
+                    "收到文件接力请求时启动状态尚未就绪（{} 个文件）",
+                    paths.len()
+                );
+            }
         }));
     }
 
@@ -122,14 +130,14 @@ pub fn run() {
             app.manage(store);
             app.manage(scan);
 
-            // 双击文件 / 「打开方式」/ 拖到图标上：路径都在命令行里（SPEC §12.4）。
-            // 前端还没订阅完事件，所以留到它就绪后再问一次，见 `pending_open_paths`
-            app.manage(commands::startup::PendingOpenPaths::new(
-                commands::startup::file_arguments(&std::env::args().collect::<Vec<_>>()),
-            ));
             Ok(())
         })
         .on_menu_event(|app, event| native_menu::emit_action(app, event.id()))
+        // 单实例插件在 `build` 阶段就会启动接力监听；这个状态必须在插件初始化
+        // 之前注册，否则 macOS「打开方式」过早到达会触发缺少状态的 panic。
+        .manage(commands::startup::PendingOpenPaths::new(
+            commands::startup::file_arguments(&std::env::args().collect::<Vec<_>>()),
+        ))
         .manage(state::AppState::default())
         .manage(commands::workspace::WorkspaceWatchers::default())
         .manage(std::sync::Arc::new(stream::StreamDocuments::default()))

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   takeStartupPaths: vi.fn<() => Promise<string[]>>(),
   listenOpenPaths: vi.fn(),
   listenDroppedPaths: vi.fn(),
+  openHandler: null as ((paths: string[]) => void) | null,
   droppedHandler: null as ((paths: string[]) => void) | null,
 }));
 
@@ -26,6 +27,7 @@ describe("useOpenRequests", () => {
       mocks.droppedHandler = handler;
       return Promise.resolve(() => {});
     });
+    mocks.openHandler = null;
     mocks.droppedHandler = null;
   });
 
@@ -41,5 +43,28 @@ describe("useOpenRequests", () => {
       "/tmp/one.txt",
       "/tmp/two.md",
     ]);
+  });
+
+  it("不会丢失前端挂载期间到达的打开请求", async () => {
+    const open = vi.fn<(path: string) => Promise<void>>().mockResolvedValue();
+
+    mocks.listenOpenPaths.mockImplementation(
+      (handler: (paths: string[]) => void) =>
+        Promise.resolve().then(() => {
+          mocks.openHandler = handler;
+          return () => {
+            if (mocks.openHandler === handler) mocks.openHandler = null;
+          };
+        }),
+    );
+    mocks.takeStartupPaths.mockImplementation(async () => {
+      await Promise.resolve();
+      mocks.openHandler?.(["/tmp/reopened.txt"]);
+      return [];
+    });
+
+    renderHook(() => useOpenRequests(open));
+
+    await waitFor(() => expect(open).toHaveBeenCalledWith("/tmp/reopened.txt"));
   });
 });

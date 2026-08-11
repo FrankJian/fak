@@ -25,21 +25,33 @@ export function useOpenRequests(open: (path: string) => Promise<void>): void {
       }
     };
 
-    void takeStartupPaths()
-      .then(openAll)
-      .catch((error: unknown) => logger.warn("startup paths failed", error));
-
     let unlistenForwarded: (() => void) | null = null;
-    void listenOpenPaths((paths) => void openAll(paths))
-      .then((off) => {
-        if (cancelled) off();
-        else unlistenForwarded = off;
-      })
-      .catch((error: unknown) =>
-        logger.warn("open path subscribe failed", error),
-      );
-
     let unlistenDropped: (() => void) | null = null;
+
+    // The backend marks startup paths as taken as soon as they are read. Wait
+    // for the forwarded-path listener to be installed first, otherwise a
+    // macOS Open With event can arrive in that small gap and be emitted before
+    // the frontend is listening.
+    const setupForwardedPaths = async () => {
+      let off: (() => void) | null = null;
+      try {
+        off = await listenOpenPaths((paths) => void openAll(paths));
+        if (cancelled) {
+          off();
+          return;
+        }
+        unlistenForwarded = off;
+
+        const startupPaths = await takeStartupPaths();
+        await openAll(startupPaths);
+      } catch (error: unknown) {
+        off?.();
+        logger.warn("startup paths failed", error);
+      }
+    };
+
+    void setupForwardedPaths();
+
     void listenDroppedPaths((paths) => void openAll(paths))
       .then((off) => {
         if (cancelled) off();
