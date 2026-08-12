@@ -746,7 +746,7 @@ export function registerWorkspaceActions(
     id: "find.toggleReverse",
     titleKey: "find.reverse",
     categoryKey: "category.edit",
-    icon: "findPrevious",
+    icon: "findDirection",
     when: editorReady,
     run: () => panels.toggleFindReverse(),
   });

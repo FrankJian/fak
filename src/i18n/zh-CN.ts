@@ -8,6 +8,7 @@ export const zhCN = {
   "markdown.loading": "正在渲染预览…",
   "markdown.failed": "预览渲染失败，请重试。",
   "markdown.refresh": "刷新预览",
+  "markdown.resize": "拖拽调整编辑区与预览区宽度",
   "markdown.manualRefresh": "大文件预览仅在手动刷新时更新。",
   "markdown.toolbar": "Markdown 工具栏",
   "markdown.format.heading": "标题",

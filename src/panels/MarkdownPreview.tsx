@@ -17,6 +17,10 @@ import { assetUrl } from "../ipc/assets";
 import { isTauriAvailable } from "../ipc/invoke";
 import { renderDiagrams, renderMath } from "./markdownPostProcess";
 import { logger } from "../lib/logger";
+import {
+  MARKDOWN_SYNC_SCROLL_MS,
+  markdownPreviewScrollTop,
+} from "../lib/markdownPreviewScroll";
 
 const RENDER_DEBOUNCE_MS = 140;
 
@@ -57,6 +61,13 @@ export function MarkdownPreview({
   const requestId = useRef(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLElement>(null);
+  const scrollFrameRef = useRef<number | null>(null);
+
+  const stopScrollAnimation = useCallback(() => {
+    if (scrollFrameRef.current === null) return;
+    window.cancelAnimationFrame(scrollFrameRef.current);
+    scrollFrameRef.current = null;
+  }, []);
 
   const refresh = useCallback(async () => {
     const currentRequest = ++requestId.current;
@@ -120,7 +131,8 @@ export function MarkdownPreview({
     );
   }, [html]);
 
-  // 源码滚到第几行，预览就滚到带那个行号的锚点
+  // 源码滚到第几行，预览就平滑跟到带那个行号的锚点。每次新目标都会
+  // 从当前位置重定向，连续滚动时不会积压一长串动画。
   useEffect(() => {
     if (!syncScroll || loading || failed) return;
     const container = contentRef.current;
@@ -128,12 +140,42 @@ export function MarkdownPreview({
     if (!container || !scroller) return;
     const anchor = nearestAnchor(container, topLine + 1);
     if (!anchor) return;
-    scroller.scrollTo({
-      top:
-        anchor.getBoundingClientRect().top -
-        container.getBoundingClientRect().top,
-    });
-  }, [syncScroll, topLine, html, loading, failed]);
+    const target =
+      anchor.getBoundingClientRect().top -
+      container.getBoundingClientRect().top;
+    stopScrollAnimation();
+    if (
+      Math.abs(target - scroller.scrollTop) < 1 ||
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      scroller.scrollTop = target;
+      return;
+    }
+
+    const start = scroller.scrollTop;
+    const startedAt = performance.now();
+    const tick = (now: number) => {
+      const elapsed = now - startedAt;
+      scroller.scrollTop = markdownPreviewScrollTop(start, target, elapsed);
+      if (elapsed >= MARKDOWN_SYNC_SCROLL_MS) {
+        scroller.scrollTop = target;
+        scrollFrameRef.current = null;
+        return;
+      }
+      scrollFrameRef.current = window.requestAnimationFrame(tick);
+    };
+    scrollFrameRef.current = window.requestAnimationFrame(tick);
+    return stopScrollAnimation;
+  }, [
+    syncScroll,
+    topLine,
+    html,
+    loading,
+    failed,
+    stopScrollAnimation,
+  ]);
+
+  useEffect(() => stopScrollAnimation, [stopScrollAnimation]);
 
   return (
     <aside
@@ -141,6 +183,8 @@ export function MarkdownPreview({
       aria-label={t("markdown.preview")}
       className="markdown-preview min-h-0 min-w-0 flex-1 overflow-auto border-l border-[var(--border-subtle)] bg-[var(--bg-base)]"
       onClick={openLink}
+      onPointerDown={stopScrollAnimation}
+      onWheel={stopScrollAnimation}
     >
       {!autoRefresh && (
         <div className="flex h-[var(--h-toolbar)] items-center justify-between border-b border-[var(--border-subtle)] px-[var(--space-2)]">

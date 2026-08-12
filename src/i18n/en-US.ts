@@ -10,6 +10,7 @@ export const enUS: Record<MessageKey, string> = {
   "markdown.loading": "Rendering preview…",
   "markdown.failed": "Preview rendering failed. Try again.",
   "markdown.refresh": "Refresh preview",
+  "markdown.resize": "Drag to resize the editor and preview panes",
   "markdown.manualRefresh":
     "Large-file previews update only when refreshed manually.",
   "markdown.toolbar": "Markdown toolbar",

@@ -165,7 +165,7 @@ export function FindPanel({
           onClick={() => toggle("multiline")}
         />
         <IconButton
-          icon="findPrevious"
+          icon="findDirection"
           label={t("find.reverse")}
           active={findReverse}
           onClick={find.toggleFindReverse}

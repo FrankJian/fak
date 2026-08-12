@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { EditorStatus } from "../editor/useEditorView";
 import {
@@ -35,6 +36,10 @@ import { UpdateDialog } from "../panels/UpdateDialog";
 import { ExternalToolPicker } from "../panels/ExternalToolPicker";
 import { planReplaceAll, replaceAllInDocument } from "../ipc/search";
 import { relativeToRoot } from "../lib/workspacePath";
+import {
+  clampMarkdownEditorSplit,
+  markdownEditorSplitFromDrag,
+} from "../lib/markdownSplit";
 import { GoToLinePanel } from "../panels/GoToLinePanel";
 import { MarkdownPreview } from "../panels/MarkdownPreview";
 import { MarkdownToolbar } from "../panels/MarkdownToolbar";
@@ -158,8 +163,14 @@ export function App() {
   const [findScope, setFindScope] = useState<FindScope>("document");
   const [markdownPreviewMode, setMarkdownPreviewMode] =
     useState<MarkdownPreviewMode>("hidden");
-  const [markdownRevision, setMarkdownRevision] = useState(0);
+  const [editorRevision, setEditorRevision] = useState(0);
   const [previewTopLine, setPreviewTopLine] = useState(0);
+  const [markdownEditorSplit, setMarkdownEditorSplit] = useState(50);
+  const markdownSplitDragRef = useRef<{
+    startX: number;
+    startSplit: number;
+    width: number;
+  } | null>(null);
   const [settingsGroup, setSettingsGroup] = useState<SettingsGroup | null>(
     null,
   );
@@ -271,6 +282,49 @@ export function App() {
     setMarkdownPreviewMode((mode) => (mode === "hidden" ? "split" : "hidden"));
   }, []);
 
+  const onMarkdownSplitMove = useCallback((event: globalThis.PointerEvent) => {
+    const drag = markdownSplitDragRef.current;
+    if (!drag) return;
+    setMarkdownEditorSplit(
+      markdownEditorSplitFromDrag(
+        drag.startSplit,
+        drag.startX,
+        event.clientX,
+        drag.width,
+      ),
+    );
+  }, []);
+
+  const endMarkdownSplitDrag = useCallback(() => {
+    markdownSplitDragRef.current = null;
+    window.removeEventListener("pointermove", onMarkdownSplitMove);
+  }, [onMarkdownSplitMove]);
+
+  const startMarkdownSplitDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const width = event.currentTarget.parentElement?.clientWidth ?? 0;
+      markdownSplitDragRef.current = {
+        startX: event.clientX,
+        startSplit: clampMarkdownEditorSplit(markdownEditorSplit),
+        width,
+      };
+      window.addEventListener("pointermove", onMarkdownSplitMove);
+      window.addEventListener("pointerup", endMarkdownSplitDrag, {
+        once: true,
+      });
+      event.preventDefault();
+    },
+    [endMarkdownSplitDrag, markdownEditorSplit, onMarkdownSplitMove],
+  );
+
+  useEffect(
+    () => () => {
+      endMarkdownSplitDrag();
+      window.removeEventListener("pointerup", endMarkdownSplitDrag);
+    },
+    [endMarkdownSplitDrag],
+  );
+
   const openFolder = useCallback(async () => {
     const path = await pickFolderToOpen();
     if (path === null) return;
@@ -334,7 +388,7 @@ export function App() {
   const noteEdited = useCallback(() => {
     backup.noteEdit();
     lastEditAtRef.current = Date.now();
-    setMarkdownRevision((revision) => revision + 1);
+    setEditorRevision((revision) => revision + 1);
   }, [backup]);
 
   const formatMarkdown = useCallback(
@@ -354,6 +408,7 @@ export function App() {
     handleRef: workspace.handleRef,
     open: findMode !== "closed",
     parseEscapes: findMode === "replace",
+    contentRevision: editorRevision,
   });
 
   const workspaceRoot = fileTree.root?.path ?? null;
@@ -1096,46 +1151,87 @@ export function App() {
               <div className="flex min-h-0 min-w-0 flex-1" aria-busy="true" />
             }
           >
-            <EditorPane
-              key={activeTab.meta.documentId}
-              meta={activeTab.meta}
-              filePath={activeTab.path}
-              initialText={workspace.text}
-              initialViewportAnchor={activeTab.viewportAnchor}
-              initialFoldedLines={activeTab.foldedLines}
-              onSyncStatusChange={(status) =>
-                setSyncStatus(activeTab.meta.documentId, status)
-              }
-              onEdited={noteEdited}
-              onToggleBookmark={bookmarks.toggleAtLine}
-              onCursorChange={outline.noteCursor}
-              onEditorStatusChange={setEditorStatus}
-              onViewportAnchorChange={(anchor) =>
-                setViewportAnchor(activeTab.meta.documentId, anchor)
-              }
-              onFoldedLinesChange={(lines) =>
-                setFoldedLines(activeTab.meta.documentId, lines)
-              }
-              onTopLineChange={setPreviewTopLine}
-              handleRef={workspace.handleRef}
-              searchPositions={find.positions}
-              searchOverviewLength={find.overviewLength}
-              visible={!canPreviewMarkdown || markdownPreviewMode !== "preview"}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setEditorMenu({ x: event.clientX, y: event.clientY });
-              }}
-            />
-            {canPreviewMarkdown && markdownPreviewMode !== "hidden" && (
-              <MarkdownPreview
-                documentId={activeTab.meta.documentId}
-                revision={markdownRevision}
-                autoRefresh={activeTab.meta.mode === "full"}
-                topLine={previewTopLine}
-                syncScroll={previewSyncScroll}
-                blockRemoteImages={previewBlockRemoteImages}
-              />
-            )}
+            <div className="flex min-h-0 min-w-0 flex-1">
+              <div
+                className={
+                  canPreviewMarkdown && markdownPreviewMode === "preview"
+                    ? "hidden"
+                    : canPreviewMarkdown && markdownPreviewMode === "split"
+                      ? "flex min-h-0 min-w-0 shrink-0"
+                      : "flex min-h-0 min-w-0 flex-1"
+                }
+                style={
+                  canPreviewMarkdown && markdownPreviewMode === "split"
+                    ? { flexBasis: `${markdownEditorSplit}%` }
+                    : undefined
+                }
+              >
+                <EditorPane
+                  key={activeTab.meta.documentId}
+                  meta={activeTab.meta}
+                  filePath={activeTab.path}
+                  initialText={workspace.text}
+                  initialViewportAnchor={activeTab.viewportAnchor}
+                  initialFoldedLines={activeTab.foldedLines}
+                  onSyncStatusChange={(status) =>
+                    setSyncStatus(activeTab.meta.documentId, status)
+                  }
+                  onEdited={noteEdited}
+                  onToggleBookmark={bookmarks.toggleAtLine}
+                  onCursorChange={outline.noteCursor}
+                  onEditorStatusChange={setEditorStatus}
+                  onViewportAnchorChange={(anchor) =>
+                    setViewportAnchor(activeTab.meta.documentId, anchor)
+                  }
+                  onFoldedLinesChange={(lines) =>
+                    setFoldedLines(activeTab.meta.documentId, lines)
+                  }
+                  onTopLineChange={setPreviewTopLine}
+                  handleRef={workspace.handleRef}
+                  searchPositions={find.positions}
+                  searchOverviewLength={find.overviewLength}
+                  visible={
+                    !canPreviewMarkdown || markdownPreviewMode !== "preview"
+                  }
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setEditorMenu({ x: event.clientX, y: event.clientY });
+                  }}
+                />
+              </div>
+              {canPreviewMarkdown && markdownPreviewMode === "split" && (
+                <div
+                  role="separator"
+                  aria-label={t("markdown.resize")}
+                  aria-orientation="vertical"
+                  className="w-[3px] shrink-0 cursor-col-resize bg-[var(--border-subtle)] hover:bg-[var(--accent-border)]"
+                  onPointerDown={startMarkdownSplitDrag}
+                />
+              )}
+              {canPreviewMarkdown && markdownPreviewMode !== "hidden" && (
+                <div
+                  className={
+                    markdownPreviewMode === "split"
+                      ? "flex min-h-0 min-w-0 shrink-0"
+                      : "flex min-h-0 min-w-0 flex-1"
+                  }
+                  style={
+                    markdownPreviewMode === "split"
+                      ? { flexBasis: `${100 - markdownEditorSplit}%` }
+                      : undefined
+                  }
+                >
+                  <MarkdownPreview
+                    documentId={activeTab.meta.documentId}
+                    revision={editorRevision}
+                    autoRefresh={activeTab.meta.mode === "full"}
+                    topLine={previewTopLine}
+                    syncScroll={previewSyncScroll}
+                    blockRemoteImages={previewBlockRemoteImages}
+                  />
+                </div>
+              )}
+            </div>
           </Suspense>
         ) : (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-3 text-[var(--text-tertiary)]">

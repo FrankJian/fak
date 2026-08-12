@@ -3,6 +3,10 @@ import {
   densityBuckets,
   lineToY,
   MIN_VIEWPORT_PX,
+  resampleDensity,
+  scrollMetrics,
+  scrollTopForProgress,
+  viewportRectFromScroll,
   viewportRect,
   yToLine,
 } from "./minimap";
@@ -64,6 +68,37 @@ describe("小地图坐标换算", () => {
     expect(rect.height).toBe(80);
     expect(rect.top).toBe(0);
   });
+
+  it("使用真实滚动范围计算滑块并精确贴住底部", () => {
+    expect(viewportRectFromScroll(0, 0.2, 100)).toEqual({
+      top: 0,
+      height: 20,
+    });
+    expect(viewportRectFromScroll(1, 0.2, 100)).toEqual({
+      top: 80,
+      height: 20,
+    });
+  });
+
+  it("长文档的最小滑块仍覆盖完整可拖动轨道", () => {
+    expect(viewportRectFromScroll(0.5, 0.0001, 100)).toEqual({
+      top: 48,
+      height: MIN_VIEWPORT_PX,
+    });
+    expect(viewportRectFromScroll(1, 0.0001, 100)).toEqual({
+      top: 96,
+      height: MIN_VIEWPORT_PX,
+    });
+  });
+
+  it("滚动指标和反向换算以可滚动距离为准", () => {
+    expect(scrollMetrics(450, 1000, 100)).toEqual({
+      progress: 0.5,
+      viewportFraction: 0.1,
+    });
+    expect(scrollTopForProgress(1, 1000, 100)).toBe(900);
+    expect(scrollTopForProgress(0.5, 1000, 100)).toBe(450);
+  });
 });
 
 describe("行长度密度", () => {
@@ -86,5 +121,9 @@ describe("行长度密度", () => {
 
   it("全是空行时不除零", () => {
     expect(densityBuckets([0, 0, 0], 3)).toEqual([0, 0, 0]);
+  });
+
+  it("密度桶多于画布像素时取最大值并覆盖全文", () => {
+    expect(resampleDensity([0.1, 0.8, 0.2, 1], 2)).toEqual([0.8, 1]);
   });
 });

@@ -144,4 +144,32 @@ describe("useKeyboard sequences", () => {
 
     expect(action).toHaveBeenCalledOnce();
   });
+
+  it("handles an app shortcut before the editor consumes the keydown", () => {
+    const openFind = vi.fn();
+    registerAction({
+      id: "find.open",
+      titleKey: "find.open",
+      categoryKey: "category.edit",
+      shortcut: "Ctrl+F",
+      run: openFind,
+    });
+    renderHook(() => useKeyboard(context));
+
+    const editor = document.createElement("div");
+    editor.addEventListener("keydown", (event) => event.preventDefault());
+    document.body.appendChild(editor);
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+      key: "f",
+    });
+
+    act(() => editor.dispatchEvent(event));
+
+    expect(openFind).toHaveBeenCalledOnce();
+    expect(event.defaultPrevented).toBe(true);
+    editor.remove();
+  });
 });

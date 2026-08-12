@@ -32,6 +32,62 @@ export interface ViewportRect {
   height: number;
 }
 
+export interface MinimapScrollMetrics {
+  progress: number;
+  viewportFraction: number;
+}
+
+function clampUnit(value: number): number {
+  return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
+}
+
+/**
+ * 真实滚动尺寸 → 小地图滚动指标。
+ *
+ * `progress` 必须以 `scrollHeight - clientHeight` 为分母；若直接除以
+ * `scrollHeight`，正文滚到底时滑块永远到不了轨道底部。
+ */
+export function scrollMetrics(
+  scrollTop: number,
+  scrollHeight: number,
+  clientHeight: number,
+): MinimapScrollMetrics {
+  if (scrollHeight <= 0 || clientHeight <= 0 || scrollHeight <= clientHeight) {
+    return { progress: 0, viewportFraction: 1 };
+  }
+  return {
+    progress: clampUnit(scrollTop / (scrollHeight - clientHeight)),
+    viewportFraction: clampUnit(clientHeight / scrollHeight),
+  };
+}
+
+/** 小地图滚动比例 → 原生滚动容器的 `scrollTop`。 */
+export function scrollTopForProgress(
+  progress: number,
+  scrollHeight: number,
+  clientHeight: number,
+): number {
+  return clampUnit(progress) * Math.max(0, scrollHeight - clientHeight);
+}
+
+/**
+ * 用真实滚动比例放置视口滑块。滑块顶部走的是扣除自身高度后的轨道，
+ * 因此 `progress = 1` 时底边会精确贴住小地图底部。
+ */
+export function viewportRectFromScroll(
+  progress: number,
+  viewportFraction: number,
+  height: number,
+): ViewportRect {
+  if (height <= 0) return { top: 0, height: 0 };
+  const scaled = Math.round(clampUnit(viewportFraction) * height);
+  const rectHeight = Math.min(height, Math.max(MIN_VIEWPORT_PX, scaled));
+  return {
+    top: Math.round(clampUnit(progress) * (height - rectHeight)),
+    height: rectHeight,
+  };
+}
+
 /**
  * 视口指示矩形。
  *
@@ -70,4 +126,21 @@ export function densityBuckets(
     buckets[y] = Math.max(buckets[y], length / longest);
   }
   return buckets;
+}
+
+/** 把后端固定数量的密度桶重采样到当前画布高度，覆盖整篇文档。 */
+export function resampleDensity(
+  density: readonly number[],
+  height: number,
+): number[] {
+  if (height <= 0 || density.length === 0) return [];
+  const rows = new Array<number>(height).fill(0);
+  density.forEach((value, index) => {
+    const y = Math.min(
+      height - 1,
+      Math.floor((index / density.length) * height),
+    );
+    rows[y] = Math.max(rows[y], value);
+  });
+  return rows;
 }

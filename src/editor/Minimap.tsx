@@ -9,7 +9,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../i18n/useTranslation";
-import { lineToY, viewportRect, yToLine } from "../lib/minimap";
+import {
+  lineToY,
+  resampleDensity,
+  viewportRectFromScroll,
+} from "../lib/minimap";
 
 export interface MinimapMark {
   line: number;
@@ -17,14 +21,17 @@ export interface MinimapMark {
 
 interface MinimapProps {
   totalLines: number;
-  topLine: number;
-  visibleLines: number;
+  /** 原生滚动容器在可滚动距离中的位置（0..1）。 */
+  scrollProgress: number;
+  /** 视口高度占完整滚动高度的比例（0..1）。 */
+  viewportFraction: number;
   /** Tier A 的行长度密度（0..1，每像素一格）；Tier B/C 传空数组 */
   density: readonly number[];
   matches: readonly MinimapMark[];
   changes: readonly MinimapMark[];
   autohide: boolean;
-  onSeek: (line: number) => void;
+  /** 只滚动页面，不改变光标或选区。 */
+  onScrollProgress: (progress: number) => void;
 }
 
 function cssColor(element: HTMLElement, name: string): string {
@@ -33,18 +40,20 @@ function cssColor(element: HTMLElement, name: string): string {
 
 export function Minimap({
   totalLines,
-  topLine,
-  visibleLines,
+  scrollProgress,
+  viewportFraction,
   density,
   matches,
   changes,
   autohide,
-  onSeek,
+  onScrollProgress,
 }: MinimapProps) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hovered, setHovered] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const draggingRef = useRef(false);
+  const dragOffsetRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -68,7 +77,7 @@ export function Minimap({
     const viewportColor = cssColor(canvas, "--bg-hover");
 
     context.fillStyle = textColor;
-    density.forEach((value, y) => {
+    resampleDensity(density, Math.ceil(height)).forEach((value, y) => {
       if (value <= 0) return;
       context.globalAlpha = 0.25 + value * 0.45;
       context.fillRect(2, y, Math.max(1, (width - 4) * value), 1);
@@ -85,18 +94,45 @@ export function Minimap({
       context.fillRect(width - 3, lineToY(mark.line, totalLines, height), 3, 2);
     }
 
-    const rect = viewportRect(topLine, visibleLines, totalLines, height);
+    const rect = viewportRectFromScroll(
+      scrollProgress,
+      viewportFraction,
+      height,
+    );
     context.fillStyle = viewportColor;
-    context.globalAlpha = 0.5;
+    context.globalAlpha = dragging ? 0.8 : hovered ? 0.65 : 0.5;
     context.fillRect(0, rect.top, width, rect.height);
     context.globalAlpha = 1;
-  }, [totalLines, topLine, visibleLines, density, matches, changes]);
+  }, [
+    totalLines,
+    scrollProgress,
+    viewportFraction,
+    density,
+    matches,
+    changes,
+    hovered,
+    dragging,
+  ]);
 
-  const seekTo = (clientY: number) => {
+  const scrollFromPointer = (clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const bounds = canvas.getBoundingClientRect();
-    onSeek(yToLine(clientY - bounds.top, totalLines, bounds.height));
+    const rect = viewportRectFromScroll(
+      scrollProgress,
+      viewportFraction,
+      bounds.height,
+    );
+    const trackHeight = Math.max(0, bounds.height - rect.height);
+    if (trackHeight === 0) {
+      onScrollProgress(0);
+      return;
+    }
+    const thumbTop = Math.min(
+      trackHeight,
+      Math.max(0, clientY - bounds.top - dragOffsetRef.current),
+    );
+    onScrollProgress(thumbTop / trackHeight);
   };
 
   const visible = !autohide || hovered || dragging;
@@ -114,25 +150,48 @@ export function Minimap({
         tabIndex={-1}
         aria-label={t("minimap.label")}
         aria-valuemin={0}
-        aria-valuemax={Math.max(0, totalLines - 1)}
-        aria-valuenow={topLine}
-        className="block h-full w-full cursor-pointer transition-opacity"
+        aria-valuemax={100}
+        aria-valuenow={Math.round(scrollProgress * 100)}
+        aria-valuetext={`${Math.round(scrollProgress * 100)}%`}
+        className={`block h-full w-full transition-opacity ${dragging ? "cursor-grabbing" : "cursor-pointer"}`}
         style={{
           opacity: visible ? 1 : 0,
           transitionDuration: "var(--duration-fast)",
+          touchAction: "none",
         }}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const rect = viewportRectFromScroll(
+            scrollProgress,
+            viewportFraction,
+            bounds.height,
+          );
+          const localY = event.clientY - bounds.top;
+          dragOffsetRef.current =
+            localY >= rect.top && localY <= rect.top + rect.height
+              ? localY - rect.top
+              : rect.height / 2;
+          draggingRef.current = true;
           setDragging(true);
-          seekTo(event.clientY);
+          scrollFromPointer(event.clientY);
         }}
         onPointerMove={(event) => {
-          if (dragging) seekTo(event.clientY);
+          if (draggingRef.current) scrollFromPointer(event.clientY);
         }}
         onPointerUp={(event) => {
           event.currentTarget.releasePointerCapture(event.pointerId);
+          draggingRef.current = false;
+          setDragging(false);
+        }}
+        onPointerCancel={() => {
+          draggingRef.current = false;
+          setDragging(false);
+        }}
+        onLostPointerCapture={() => {
+          draggingRef.current = false;
           setDragging(false);
         }}
       />

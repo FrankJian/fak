@@ -186,10 +186,13 @@ export function useKeyboard(context: ActionContext): void {
       run(action, event.target);
     };
 
-    window.addEventListener("keydown", onKeyDown);
+    // 必须在捕获阶段处理应用快捷键：macOS 下 CodeMirror 的默认 keymap
+    // 会先消费 Ctrl+F（Emacs 风格的“光标右移”），若等冒泡阶段再处理，
+    // `defaultPrevented` 已经为 true，查找动作就永远收不到这次按键。
+    window.addEventListener("keydown", onKeyDown, true);
     return () => {
       clearPending(false);
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
   }, []);
 

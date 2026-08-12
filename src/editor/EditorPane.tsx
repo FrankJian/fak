@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
   type RefObject,
@@ -10,6 +9,7 @@ import type { DocumentMeta } from "../ipc/documents";
 import type { SyncStatus } from "../ipc/editSync";
 import type { SearchMatch } from "../ipc/search";
 import { useTranslation } from "../i18n/useTranslation";
+import { scrollMetrics, scrollTopForProgress } from "../lib/minimap";
 import { useAppStore } from "../store/appStore";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { StickyHeader } from "./StickyHeader";
@@ -100,23 +100,10 @@ export function EditorPane({
   );
 
   const [topLine, setTopLine] = useState(0);
-  const paneRef = useRef<HTMLDivElement>(null);
-  const [paneHeight, setPaneHeight] = useState(0);
-
-  // 视口指示条的高度直接取决于可见行数，估一个值会让它在不同字号下明显偏
-  useEffect(() => {
-    const pane = paneRef.current;
-    if (!pane) return;
-    const observer = new ResizeObserver(([entry]) =>
-      setPaneHeight(entry.contentRect.height),
-    );
-    observer.observe(pane);
-    return () => observer.disconnect();
-  }, []);
-
-  const lineHeightPx = appearance.fontSize * appearance.lineHeight;
-  const visibleLines =
-    lineHeightPx > 0 ? Math.ceil(paneHeight / lineHeightPx) : 0;
+  const [minimapScroll, setMinimapScroll] = useState({
+    progress: 0,
+    viewportFraction: 1,
+  });
 
   const containerRef = useEditorView({
     meta,
@@ -164,6 +151,42 @@ export function EditorPane({
 
   const minimapOn = useAppStore((state) => state.minimap);
   const minimapAutohide = useAppStore((state) => state.minimapAutohide);
+
+  useEffect(() => {
+    const scroller =
+      containerRef.current?.querySelector<HTMLElement>(".cm-scroller");
+    if (!scroller) return;
+    let frame: number | null = null;
+    const measure = () => {
+      frame = null;
+      const next = scrollMetrics(
+        scroller.scrollTop,
+        scroller.scrollHeight,
+        scroller.clientHeight,
+      );
+      setMinimapScroll((previous) =>
+        previous.progress === next.progress &&
+        previous.viewportFraction === next.viewportFraction
+          ? previous
+          : next,
+      );
+    };
+    const scheduleMeasure = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(measure);
+    };
+    scroller.addEventListener("scroll", scheduleMeasure, { passive: true });
+    const observer = new ResizeObserver(scheduleMeasure);
+    observer.observe(scroller);
+    const content = scroller.querySelector<HTMLElement>(".cm-content");
+    if (content) observer.observe(content);
+    measure();
+    return () => {
+      scroller.removeEventListener("scroll", scheduleMeasure);
+      observer.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [containerRef, meta.documentId]);
   // Tier A 才画行长度条（SPEC §4.1 能力表），Rust 侧也会再把关一次
   const density = useMinimapDensity(
     meta.documentId,
@@ -185,7 +208,7 @@ export function EditorPane({
           loadSiblings={context.siblingsOf}
         />
       )}
-      <div ref={paneRef} className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <div className="relative min-h-0 min-w-0 flex-1">
           <StickyHeader
             chain={context.sticky}
@@ -209,15 +232,21 @@ export function EditorPane({
           {minimapOn && (
             <Minimap
               totalLines={meta.lineCount}
-              topLine={topLine}
-              visibleLines={visibleLines}
+              scrollProgress={minimapScroll.progress}
+              viewportFraction={minimapScroll.viewportFraction}
               density={density}
               matches={searchPositions}
               changes={changeMarks}
               autohide={minimapAutohide}
-              onSeek={(line) =>
-                handleRef.current?.revealLineColumn(line + 1, 1)
-              }
+              onScrollProgress={(progress) => {
+                const scroller = handleRef.current?.scrollElement();
+                if (!scroller) return;
+                scroller.scrollTop = scrollTopForProgress(
+                  progress,
+                  scroller.scrollHeight,
+                  scroller.clientHeight,
+                );
+              }}
             />
           )}
         </div>

@@ -16,6 +16,7 @@ import type { DocumentMeta } from "../ipc/documents";
 import { readLines } from "../ipc/documents";
 import { useTranslation } from "../i18n/useTranslation";
 import { parseStreamTarget } from "../lib/streamTarget";
+import { scrollMetrics, scrollTopForProgress } from "../lib/minimap";
 import { StreamToolbar } from "./StreamToolbar";
 import { StreamFindBar } from "./StreamFindBar";
 import { useStreamFind } from "./useStreamFind";
@@ -48,6 +49,10 @@ export function StreamViewer({
   const pendingRef = useRef(new Set<number>());
   const [cache, setCache] = useState(() => new Map<number, string>());
   const [range, setRange] = useState({ start: 0, end: 40 });
+  const [minimapScroll, setMinimapScroll] = useState({
+    progress: 0,
+    viewportFraction: 1,
+  });
   const [gotoValue, setGotoValue] = useState("");
   // 能力说明每打开一份 Tier C 文件显示一次（SPEC P4）
   const [showCapabilities, setShowCapabilities] = useState(true);
@@ -115,7 +120,22 @@ export function StreamViewer({
     const start = Math.floor(viewport.scrollTop / LINE_HEIGHT);
     const visible = Math.ceil(viewport.clientHeight / LINE_HEIGHT);
     const end = Math.min(lineCount, start + visible);
-    setRange({ start, end });
+    setRange((previous) =>
+      previous.start === start && previous.end === end
+        ? previous
+        : { start, end },
+    );
+    const nextScroll = scrollMetrics(
+      viewport.scrollTop,
+      viewport.scrollHeight,
+      viewport.clientHeight,
+    );
+    setMinimapScroll((previous) =>
+      previous.progress === nextScroll.progress &&
+      previous.viewportFraction === nextScroll.viewportFraction
+        ? previous
+        : nextScroll,
+    );
     const fetchStart = Math.max(0, start - OVERSCAN);
     const fetchEnd = Math.min(lineCount, end + OVERSCAN);
     void fetchWindow(fetchStart, fetchEnd - fetchStart);
@@ -124,6 +144,17 @@ export function StreamViewer({
   useEffect(() => {
     void fetchWindow(0, Math.min(lineCount, 40 + OVERSCAN));
   }, [fetchWindow, meta.documentId, lineCount]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(updateRange);
+    observer.observe(viewport);
+    const content = viewport.firstElementChild;
+    if (content instanceof HTMLElement) observer.observe(content);
+    updateRange();
+    return () => observer.disconnect();
+  }, [updateRange]);
 
   // 追加进来的新行要能立刻取到正文，否则跟随时末尾是一片空行
   useEffect(() => {
@@ -260,13 +291,21 @@ export function StreamViewer({
           // Tier C 不渲染文本，只画命中标记（SPEC §4.1 能力表）
           <Minimap
             totalLines={lineCount}
-            topLine={range.start}
-            visibleLines={range.end - range.start}
+            scrollProgress={minimapScroll.progress}
+            viewportFraction={minimapScroll.viewportFraction}
             density={[]}
             matches={find.matches}
             changes={[]}
             autohide={minimapAutohide}
-            onSeek={revealLine}
+            onScrollProgress={(progress) => {
+              const viewport = viewportRef.current;
+              if (!viewport) return;
+              viewport.scrollTop = scrollTopForProgress(
+                progress,
+                viewport.scrollHeight,
+                viewport.clientHeight,
+              );
+            }}
           />
         )}
       </div>

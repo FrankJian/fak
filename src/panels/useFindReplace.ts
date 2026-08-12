@@ -98,6 +98,8 @@ interface UseFindReplaceOptions {
   handleRef: React.RefObject<EditorHandle | null>;
   open: boolean;
   parseEscapes?: boolean;
+  /** 编辑器正文每次变化时递增，用于废弃与旧正文绑定的搜索会话。 */
+  contentRevision?: number;
 }
 
 export function useFindReplace({
@@ -105,6 +107,7 @@ export function useFindReplace({
   handleRef,
   open,
   parseEscapes = false,
+  contentRevision = 0,
 }: UseFindReplaceOptions) {
   const language = useAppStore((store) => store.language);
   const findHistory = useAppStore((store) => store.findHistory);
@@ -138,6 +141,8 @@ export function useFindReplace({
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 每次查找自增；回来的结果对不上号就丢弃（乱序响应会让计数跳来跳去） */
   const runRef = useRef(0);
+  /** hook 自己提交的事务会立即重搜，随后到达的正文修订通知不应重复打断它。 */
+  const expectedContentRevisionChangesRef = useRef(0);
 
   /** 取消不是错误，静默吞掉；其余错误就地显示，正则错误优先显示位置与原因。 */
   const report = useCallback(
@@ -245,6 +250,10 @@ export function useFindReplace({
     if (session) void disposeSearch(session);
   }, []);
 
+  const discardCachedSessions = useCallback(() => {
+    for (const session of cacheRef.current.drain()) void disposeSearch(session);
+  }, []);
+
   const run = useCallback(
     async (query: string, force = false) => {
       const ticket = ++runRef.current;
@@ -264,6 +273,7 @@ export function useFindReplace({
       );
       if (force) {
         discardActiveSession();
+        discardCachedSessions();
       } else {
         cacheActiveSession();
         const cached = cacheRef.current.take(key);
@@ -334,6 +344,7 @@ export function useFindReplace({
       clear,
       clearProgress,
       discardActiveSession,
+      discardCachedSessions,
       documentId,
       report,
       selectionRange,
@@ -361,12 +372,39 @@ export function useFindReplace({
     }
   }, [rows.length, status.total, report]);
 
-  // 输入即搜：防抖后触发。`run` 的依赖里带着选项，改开关也会重搜
+  const observedContentRevisionRef = useRef(contentRevision);
+
+  // 输入即搜：防抖后触发。正文变化时，活动会话及所有筛选缓存都已过期；
+  // 先清掉旧结果，避免防抖期间继续展示正文中已经不存在的命中。
   useEffect(() => {
+    if (observedContentRevisionRef.current !== contentRevision) {
+      const revisionDelta = contentRevision - observedContentRevisionRef.current;
+      observedContentRevisionRef.current = contentRevision;
+      if (
+        revisionDelta === 1 &&
+        expectedContentRevisionChangesRef.current > 0
+      ) {
+        expectedContentRevisionChangesRef.current -= 1;
+      } else {
+        expectedContentRevisionChangesRef.current = 0;
+        runRef.current += 1;
+        discardActiveSession();
+        discardCachedSessions();
+        clear();
+      }
+    }
     if (!open) return;
     const timer = setTimeout(() => void run(state.query), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [open, state.query, run]);
+  }, [
+    clear,
+    contentRevision,
+    discardActiveSession,
+    discardCachedSessions,
+    open,
+    run,
+    state.query,
+  ]);
 
   const wasOpenRef = useRef(open);
   useEffect(() => {
@@ -450,7 +488,10 @@ export function useFindReplace({
     async (within: Utf16Range | undefined) => {
       if (!request) return;
       const edits = await planReplaceAll({ ...request, within });
-      handleRef.current?.applyReplacements(edits);
+      const handle = handleRef.current;
+      if (!handle || edits.length === 0) return;
+      expectedContentRevisionChangesRef.current += 1;
+      handle.applyReplacements(edits);
     },
     [request, handleRef],
   );
@@ -463,7 +504,9 @@ export function useFindReplace({
       rememberFind();
       rememberReplacement();
       await commit({ start: match.start, end: match.end });
-      await run(state.query);
+      // 正文已经改变，同一查询键下的旧会话与二次筛选会话都已过期。
+      // 强制重搜还会经过 IPC flush 闸门，确保 Rust 看到刚落下的编辑。
+      await run(state.query, true);
       await step(true);
     } catch (error) {
       report(error);
@@ -500,7 +543,7 @@ export function useFindReplace({
         return;
       }
       await commit(within);
-      await run(state.query);
+      await run(state.query, true);
     } catch (error) {
       report(error);
     }
@@ -519,7 +562,7 @@ export function useFindReplace({
     setStatus((previous) => ({ ...previous, pendingReplaceCount: null }));
     try {
       await commit(selectionRange());
-      await run(state.query);
+      await run(state.query, true);
     } catch (error) {
       report(error);
     }

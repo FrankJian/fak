@@ -1,6 +1,6 @@
 // @ts-expect-error Vitest 在 Node 中运行 CSS 守卫；前端产物刻意不引入 Node 类型。
 import { readFileSync } from "node:fs";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Minimap } from "./Minimap";
 
@@ -13,13 +13,13 @@ describe("Minimap layout", () => {
     render(
       <Minimap
         totalLines={20}
-        topLine={0}
-        visibleLines={10}
+        scrollProgress={0}
+        viewportFraction={0.5}
         density={[]}
         matches={[]}
         changes={[]}
         autohide={false}
-        onSeek={vi.fn()}
+        onScrollProgress={vi.fn()}
       />,
     );
 
@@ -43,13 +43,13 @@ describe("Minimap layout", () => {
     render(
       <Minimap
         totalLines={20}
-        topLine={0}
-        visibleLines={10}
+        scrollProgress={0}
+        viewportFraction={0.5}
         density={[]}
         matches={[]}
         changes={[]}
         autohide
-        onSeek={vi.fn()}
+        onScrollProgress={vi.fn()}
       />,
     );
 
@@ -64,5 +64,44 @@ describe("Minimap layout", () => {
     expect(css).toMatch(
       /\.editor-with-minimap \.cm-scroller\s*\{[^}]*padding-right:\s*var\(--w-minimap\)/s,
     );
+  });
+
+  it("drags by scroll percentage without seeking a document line", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    const onScrollProgress = vi.fn();
+    render(
+      <Minimap
+        totalLines={10_000}
+        scrollProgress={0}
+        viewportFraction={0.2}
+        density={[]}
+        matches={[]}
+        changes={[]}
+        autohide={false}
+        onScrollProgress={onScrollProgress}
+      />,
+    );
+
+    const minimap = screen.getByRole("slider", { name: "小地图" });
+    vi.spyOn(minimap, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      right: 100,
+      bottom: 100,
+      left: 0,
+      width: 100,
+      height: 100,
+      toJSON: () => ({}),
+    });
+    Object.assign(minimap, {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+    });
+
+    fireEvent.pointerDown(minimap, { pointerId: 1, clientY: 10 });
+    fireEvent.pointerMove(minimap, { pointerId: 1, clientY: 90 });
+
+    expect(onScrollProgress).toHaveBeenLastCalledWith(1);
   });
 });

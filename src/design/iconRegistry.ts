@@ -19,6 +19,7 @@ import ArrowLeftToLine from "lucide-react/icons/arrow-left-to-line";
 import ArrowRight from "lucide-react/icons/arrow-right";
 import ArrowRightToLine from "lucide-react/icons/arrow-right-to-line";
 import ArrowUp from "lucide-react/icons/arrow-up";
+import ArrowUpDown from "lucide-react/icons/arrow-up-down";
 import ArrowUpNarrowWide from "lucide-react/icons/arrow-up-narrow-wide";
 import Archive from "lucide-react/icons/archive";
 import ArrowUpFromLine from "lucide-react/icons/arrow-up-from-line";
@@ -209,6 +210,7 @@ export const icons = {
   replaceAll: ReplaceAll,
   findNext: ChevronDown,
   findPrevious: ChevronUp,
+  findDirection: ArrowUpDown,
   matchCase: CaseSensitive,
   matchWholeWord: WholeWord,
   matchRegex: Regex,
