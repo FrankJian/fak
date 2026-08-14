@@ -65,7 +65,8 @@ import { pickFolderToOpen } from "../ipc/dialog";
 import { revealInFileManager } from "../ipc/opener";
 import { countWords, type WordCount } from "../ipc/textops";
 import { onCloseRequested } from "../ipc/window";
-import { isMarkdownDocument } from "../lib/documentKind";
+import { syntaxFileName, syntaxKeyFromFileName } from "../lib/syntaxKey";
+import type { SyntaxSelection } from "../lib/syntaxKey";
 import type { SettingsGroup } from "../lib/settingsSchema";
 import { logger } from "../lib/logger";
 import {
@@ -123,6 +124,7 @@ export function App() {
     setViewportAnchor,
     setFoldedLines,
     toggleLocked,
+    setSyntaxOverride,
   } = useDocumentStore();
   const recentFiles = useAppStore((state) => state.recentFiles);
   const configHydrated = useAppStore((state) => state.hydrated);
@@ -209,11 +211,25 @@ export function App() {
   const closingTab =
     tabs.find((tab) => tab.meta.documentId === closingId) ?? null;
   const activeDiff = diff.tabs.find((tab) => tab.id === diff.activeId) ?? null;
-  const isMarkdown = isMarkdownDocument(
-    activeTab?.path ?? activeTab?.meta.fileName,
-  );
+  const detectedSyntax = activeTab
+    ? syntaxKeyFromFileName(activeTab.path ?? activeTab.meta.fileName)
+    : null;
+  const selectedSyntax: SyntaxSelection =
+    activeTab?.syntaxOverride ?? detectedSyntax ?? "plainText";
+  const effectiveFileName =
+    activeTab?.syntaxOverride !== null &&
+    activeTab?.syntaxOverride !== undefined
+      ? syntaxFileName(activeTab.syntaxOverride)
+      : activeTab?.path ?? activeTab?.meta.fileName ?? null;
+  const isMarkdown = selectedSyntax === "markdown";
   const canPreviewMarkdown =
     isMarkdown && activeTab?.meta.mode !== "stream" && !activeDiff;
+  const showFileTypePicker =
+    activeTab !== null &&
+    activeTab.meta.mode !== "stream" &&
+    (detectedSyntax === null ||
+      (activeTab.syntaxOverride !== null &&
+        activeTab.syntaxOverride !== undefined));
   const resyncing = activeTab?.syncStatus === "resyncing";
 
   // 光标行列属于某一个文档。连同 documentId 一起存再派生，切标签时天然失效——
@@ -496,7 +512,7 @@ export function App() {
     onError: workspace.report,
     tabWidth,
     useTabs: tabIndentMode === "tabs",
-    fileName: activeTab?.path ?? activeTab?.meta.fileName ?? null,
+    fileName: effectiveFileName,
   });
   const canFormatDocument = textTools.formatSyntax() !== null;
 
@@ -952,6 +968,9 @@ export function App() {
           onRedo={() => void workspace.redo()}
           onOpenCommandPalette={() => setOverlay("commandPalette")}
           onToggleMarkdownPreview={toggleMarkdownPreview}
+          onFileTypeChange={(syntax) => {
+            if (activeId) setSyntaxOverride(activeId, syntax);
+          }}
           canSave={Boolean(activeTab) && !resyncing}
           canSaveAs={
             Boolean(activeTab) &&
@@ -963,6 +982,8 @@ export function App() {
           markdownPreviewVisible={
             canPreviewMarkdown && markdownPreviewMode !== "hidden"
           }
+          fileType={selectedSyntax}
+          showFileType={showFileTypePicker}
         />
       )}
       {canPreviewMarkdown && <MarkdownToolbar onFormat={formatMarkdown} />}
@@ -1297,6 +1318,7 @@ export function App() {
         encodingButtonRef={encodingButtonRef}
         lineEndingButtonRef={lineEndingButtonRef}
         onPromoteStream={() => setPromoteStreamOpen(true)}
+        syntaxOverride={activeTab?.syntaxOverride ?? null}
       />
 
       {overlay === "commandPalette" && (

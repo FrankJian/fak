@@ -3,8 +3,10 @@
  * 与命令面板条目（SPEC §6.6.2 的三项补偿，缺一不可）。
  */
 import { IconButton } from '../design/components/IconButton';
+import { Select, type SelectOption } from '../design/components/Select';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatShortcut } from '../lib/keybinding';
+import type { SyntaxSelection } from '../lib/syntaxKey';
 import { currentPlatform } from './useKeyboard';
 
 export interface ToolbarActions {
@@ -17,6 +19,7 @@ export interface ToolbarActions {
   onRedo: () => void;
   onOpenCommandPalette: () => void;
   onToggleMarkdownPreview: () => void;
+  onFileTypeChange?: (syntax: SyntaxSelection) => void;
 }
 
 interface ToolbarProps extends ToolbarActions {
@@ -25,6 +28,8 @@ interface ToolbarProps extends ToolbarActions {
   canEdit: boolean;
   canPreviewMarkdown: boolean;
   markdownPreviewVisible: boolean;
+  fileType?: SyntaxSelection;
+  showFileType?: boolean;
 }
 
 export function Toolbar({
@@ -42,9 +47,23 @@ export function Toolbar({
   canEdit,
   canPreviewMarkdown,
   markdownPreviewVisible,
+  fileType = 'plainText',
+  showFileType = false,
+  onFileTypeChange,
 }: ToolbarProps) {
   const { t } = useTranslation();
   const undoShortcut = formatShortcut('Mod+Z', currentPlatform());
+  const fileTypeOptions: ReadonlyArray<SelectOption<SyntaxSelection>> = [
+    { value: 'plainText', label: t('syntax.plainText') },
+    { value: 'markdown', label: t('syntax.markdown') },
+    { value: 'json', label: t('syntax.json') },
+    { value: 'javaScript', label: t('syntax.javaScript') },
+    { value: 'typeScript', label: t('syntax.typeScript') },
+    { value: 'tsx', label: t('syntax.tsx') },
+    { value: 'python', label: t('syntax.python') },
+    { value: 'rust', label: t('syntax.rust') },
+    { value: 'bash', label: t('syntax.bash') },
+  ];
 
   return (
     <div
@@ -96,6 +115,15 @@ export function Toolbar({
         onClick={onRedo}
         disabled={!canEdit}
       />
+      {showFileType && onFileTypeChange && (
+        <Select
+          value={fileType}
+          options={fileTypeOptions}
+          onValueChange={onFileTypeChange}
+          aria-label={t('status.syntax')}
+          className="ml-1 max-w-[132px] text-[var(--font-size-small)]"
+        />
+      )}
       {canPreviewMarkdown && (
         <IconButton
           icon={markdownPreviewVisible ? 'hide' : 'preview'}

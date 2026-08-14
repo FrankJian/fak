@@ -51,3 +51,35 @@ describe("Toolbar Save As", () => {
     platform.mockRestore();
   });
 });
+
+describe("Toolbar file type picker", () => {
+  it("notifies the selected type for an unknown or unsaved document", () => {
+    const onFileTypeChange = vi.fn();
+    render(
+      <Toolbar
+        onNew={vi.fn()}
+        onOpen={vi.fn()}
+        onOpenFolder={vi.fn()}
+        onSave={vi.fn()}
+        onSaveAs={vi.fn()}
+        onUndo={vi.fn()}
+        onRedo={vi.fn()}
+        onOpenCommandPalette={vi.fn()}
+        onToggleMarkdownPreview={vi.fn()}
+        onFileTypeChange={onFileTypeChange}
+        fileType="plainText"
+        showFileType
+        canSave
+        canSaveAs
+        canEdit
+        canPreviewMarkdown={false}
+        markdownPreviewVisible={false}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "markdown" },
+    });
+    expect(onFileTypeChange).toHaveBeenCalledWith("markdown");
+  });
+});

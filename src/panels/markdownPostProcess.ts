@@ -8,6 +8,9 @@
  */
 import { logger } from "../lib/logger";
 
+const MERMAID_LANGUAGES = new Set(["mermaid", "flowchart", "graph"]);
+let mermaidRenderSequence = 0;
+
 /** `$...$` 行内、`$$...$$` 块级。转义过的 `\$` 不参与匹配。 */
 const INLINE_MATH = /(?<!\\)\$([^$\n]+?)(?<!\\)\$/g;
 const BLOCK_MATH = /(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$/g;
@@ -73,19 +76,65 @@ export async function renderMath(container: HTMLElement): Promise<void> {
   }
 }
 
+/** Mermaid 代码块的语言标记不区分大小写，flowchart/graph 也作为便捷别名接受。 */
+export function mermaidLanguage(block: HTMLElement): string | null {
+  for (const className of block.classList) {
+    if (!className.startsWith("language-")) continue;
+    const language = className.slice("language-".length).toLowerCase();
+    return MERMAID_LANGUAGES.has(language) ? language : null;
+  }
+  return null;
+}
+
+/**
+ * Mermaid 编辑器通常要求显式的图类型头。对 flowchart/graph 代码块别名，
+ * 允许用户只写方向和节点；正常的 `flowchart TD` / `graph TD` 内容保持原样。
+ */
+export function normalizeMermaidSource(source: string, language: string): string {
+  const trimmed = source.replace(/^\uFEFF/, "").trim();
+  if (language === "flowchart" || language === "graph") {
+    if (/^(?:flowchart|graph)\b/i.test(trimmed)) return trimmed;
+    if (/^(?:TB|TD|BT|RL|LR)\b/i.test(trimmed)) {
+      return `${language} ${trimmed}`;
+    }
+    return `${language} TD\n${trimmed}`;
+  }
+  return trimmed;
+}
+
+async function renderMermaidSource(
+  mermaid: typeof import("mermaid").default,
+  id: string,
+  source: string,
+): Promise<{ svg: string }> {
+  try {
+    return await mermaid.render(id, source);
+  } catch (error) {
+    // Mermaid 9/10 对 flowchart 关键字的兼容性不一致；graph 是官方等价语法。
+    if (!/^flowchart\b/i.test(source)) throw error;
+    return mermaid.render(`${id}-graph`, source.replace(/^flowchart\b/i, "graph"));
+  }
+}
+
 export async function renderDiagrams(container: HTMLElement): Promise<void> {
-  const blocks = [
-    ...container.querySelectorAll<HTMLElement>("pre > code.language-mermaid"),
-  ];
+  const blocks = [...container.querySelectorAll<HTMLElement>("pre > code")]
+    .map((block) => ({ block, language: mermaidLanguage(block) }))
+    .filter(
+      (entry): entry is { block: HTMLElement; language: string } =>
+        entry.language !== null,
+    );
   if (blocks.length === 0) return;
 
   const mermaid = (await import("mermaid")).default;
   mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
 
-  for (const [index, block] of blocks.entries()) {
-    const source = block.textContent ?? "";
+  for (const { block, language } of blocks) {
+    const source = normalizeMermaidSource(block.textContent ?? "", language);
+    if (source.length === 0) continue;
     try {
-      const { svg } = await mermaid.render(`fak-mermaid-${index}`, source);
+      // 每轮渲染都用新 id，避免编辑时上一轮异步渲染尚未结束而发生 id 冲突。
+      const id = `fak-mermaid-${++mermaidRenderSequence}`;
+      const { svg } = await renderMermaidSource(mermaid, id, source);
       const figure = document.createElement("div");
       figure.className = "markdown-mermaid";
       figure.innerHTML = svg;

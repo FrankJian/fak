@@ -70,6 +70,22 @@ describe("setFoldedLines", () => {
   });
 });
 
+describe("setSyntaxOverride", () => {
+  it("keeps a manual type on its tab until it is cleared", () => {
+    useDocumentStore.setState({
+      tabs: [tab("a", 1), tab("b", 2)],
+      activeId: "a",
+    });
+
+    useDocumentStore.getState().setSyntaxOverride("a", "markdown");
+    expect(useDocumentStore.getState().tabs[0]?.syntaxOverride).toBe("markdown");
+    expect(useDocumentStore.getState().tabs[1]?.syntaxOverride).toBeUndefined();
+
+    useDocumentStore.getState().setSyntaxOverride("a", null);
+    expect(useDocumentStore.getState().tabs[0]?.syntaxOverride).toBeNull();
+  });
+});
+
 describe("updateLocation", () => {
   it("switches the tab metadata and full path together after Save As", () => {
     useDocumentStore.setState({
@@ -78,6 +94,7 @@ describe("updateLocation", () => {
           ...tab("a", 1),
           path: "/work/source.json",
           meta: { documentId: "a", fileName: "source.json" } as DocumentMeta,
+          syntaxOverride: "markdown",
         },
       ],
       activeId: "a",
@@ -91,6 +108,7 @@ describe("updateLocation", () => {
     expect(useDocumentStore.getState().tabs[0]).toMatchObject({
       path: "/work/copy.json",
       meta: { fileName: "copy.json" },
+      syntaxOverride: null,
     });
   });
 });

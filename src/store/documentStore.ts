@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import type { DocumentMeta } from "../ipc/documents";
 import type { SyncStatus } from "../ipc/editSync";
+import type { SyntaxSelection } from "../lib/syntaxKey";
 
 export interface ViewportAnchor {
   line: number;
@@ -29,6 +30,8 @@ export interface Tab {
   locked: boolean;
   /** 折叠区域起始行（0 基），随会话持久化。 */
   foldedLines: number[];
+  /** 新建或未知后缀文档的手动类型；null 表示继续按文件名自动判断。 */
+  syntaxOverride?: SyntaxSelection | null;
 }
 
 interface DocumentState {
@@ -41,6 +44,10 @@ interface DocumentState {
   renamePaths: (source: string, destination: string) => void;
   setViewportAnchor: (documentId: string, anchor: ViewportAnchor) => void;
   setFoldedLines: (documentId: string, lines: readonly number[]) => void;
+  setSyntaxOverride: (
+    documentId: string,
+    syntax: SyntaxSelection | null,
+  ) => void;
   toggleLocked: (documentId: string) => void;
   setSyncStatus: (documentId: string, status: SyncStatus) => void;
   closeTab: (documentId: string) => void;
@@ -106,6 +113,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
             viewportAnchor: { line: 0, topLine: 0 },
             locked: false,
             foldedLines: [],
+            syntaxOverride: null,
           },
         ],
         activeId: meta.documentId,
@@ -122,7 +130,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   updateLocation: (meta, path) =>
     set((state) => ({
       tabs: state.tabs.map((tab) =>
-        tab.meta.documentId === meta.documentId ? { ...tab, meta, path } : tab,
+        tab.meta.documentId === meta.documentId
+          ? { ...tab, meta, path, syntaxOverride: null }
+          : tab,
       ),
     })),
 
@@ -174,6 +184,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         ),
       };
     }),
+
+  setSyntaxOverride: (documentId, syntaxOverride) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.meta.documentId === documentId
+          ? { ...tab, syntaxOverride }
+          : tab,
+      ),
+    })),
 
   toggleLocked: (documentId) =>
     set((state) => ({

@@ -11,7 +11,11 @@ import type { IconName } from "../design/iconRegistry";
 import type { DocumentMeta } from "../ipc/documents";
 import type { SyncStatus } from "../ipc/editSync";
 import { formatBytes, formatCount, formatLineEnding } from "../lib/format";
-import { syntaxKeyFromFileName, type SyntaxKey } from "../lib/syntaxKey";
+import {
+  syntaxKeyFromFileName,
+  type SyntaxKey,
+  type SyntaxSelection,
+} from "../lib/syntaxKey";
 import type { EditorStatus } from "../editor/useEditorView";
 import type { MessageKey } from "../i18n";
 import type { RefObject } from "react";
@@ -83,6 +87,7 @@ interface StatusBarProps {
   encodingButtonRef?: RefObject<HTMLButtonElement | null>;
   lineEndingButtonRef?: RefObject<HTMLButtonElement | null>;
   onPromoteStream?: () => void;
+  syntaxOverride?: SyntaxSelection | null;
 }
 
 export function StatusBar({
@@ -97,6 +102,7 @@ export function StatusBar({
   encodingButtonRef,
   lineEndingButtonRef,
   onPromoteStream,
+  syntaxOverride = null,
 }: StatusBarProps) {
   const { t, locale } = useTranslation();
 
@@ -118,10 +124,16 @@ export function StatusBar({
     };
   })();
 
-  const syntaxKey = meta ? syntaxKeyFromFileName(meta.fileName) : null;
-  const syntaxValue = syntaxKey
-    ? t(syntaxLabelKey(syntaxKey))
-    : t("syntax.plainText");
+  const detectedSyntaxKey = meta ? syntaxKeyFromFileName(meta.fileName) : null;
+  const syntaxValue = syntaxOverride
+    ? t(
+        syntaxOverride === "plainText"
+          ? "syntax.plainText"
+          : syntaxLabelKey(syntaxOverride),
+      )
+    : detectedSyntaxKey
+      ? t(syntaxLabelKey(detectedSyntaxKey))
+      : t("syntax.plainText");
   const modeHint =
     meta?.mode === "lean"
       ? t("status.mode.lean.hint")
