@@ -29,6 +29,10 @@ describe('flush 闸门', () => {
     expect(isFlushGated('resync')).toBe(false);
   });
 
+  it('系统打开请求的队列读取不等待当前编辑器同步', () => {
+    expect(isFlushGated('take_startup_paths')).toBe(false);
+  });
+
   // 这条固化的是设计取舍本身：新命令默认被拦，忘记登记的代价是一次空转，
   // 不是丢数据。反过来做就等于「靠自觉」，而任务里明确否掉了那种做法
   it('未登记过的新命令默认被拦截', () => {

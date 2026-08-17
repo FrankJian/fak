@@ -24,6 +24,7 @@ const FLUSH_EXEMPT: ReadonlySet<string> = new Set([
   "open_file",
   "new_document",
   "close_document",
+  "take_startup_paths",
   "list_encodings",
   "log_message",
 

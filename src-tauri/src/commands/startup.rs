@@ -1,7 +1,7 @@
 //! 启动与单实例转发的文件参数（SPEC §12.4、§12.5）。
 //!
 //! 双击文件、「打开方式」、拖到图标上、以及第二个实例转发过来的路径，
-//! 最终都汇到同一条通道：一个 `app://open-paths` 事件，前端逐个开成标签。
+//! 最终都进入同一队列；`app://open-paths` 只提醒前端排空队列。
 
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -10,62 +10,66 @@ use tauri::{AppHandle, Emitter};
 
 pub const OPEN_PATHS_EVENT: &str = "app://open-paths";
 
-/// 启动时命令行里带的文件。
+/// 系统交给应用、尚未被前端打开的文件。
 ///
-/// 前端订阅事件要等到它挂载完，那时启动事件早就发过了；所以这批路径先存下来，
-/// 由前端就绪后主动来取一次（取走即清空，避免热重载时重复打开）。
+/// 路径始终先入队再发通知，因此冷启动、React 严格模式重挂载和事件订阅间隙
+/// 都不会丢数据；前端每次收到通知后主动排空。
 #[derive(Debug, Default)]
 pub struct PendingOpenPaths {
     paths: Mutex<Vec<String>>,
-    /// 前端是否已经来取过。取过之后再来的路径必须走事件——
-    /// 继续排队的话没人再来取，文件就静默丢了
-    taken: AtomicBool,
+    /// 前端是否至少完成过一次主动读取。之后的新路径仍然入队，
+    /// 事件只负责提醒前端再来排空，不能把路径本身当成唯一副本。
+    frontend_ready: AtomicBool,
 }
 
 impl PendingOpenPaths {
     pub fn new(paths: Vec<String>) -> Self {
         Self {
             paths: Mutex::new(paths),
-            taken: AtomicBool::new(false),
+            frontend_ready: AtomicBool::new(false),
         }
     }
 
     /// macOS 的「打开方式」与单实例转发都可能在前端就绪前后任意时刻到达，
-    /// 由这里统一决定是排队还是直接发事件。
+    /// 由这里统一入队；前端已就绪时再额外发出排空通知。
     pub fn queue_or_emit(&self, app: &AppHandle, paths: Vec<String>) {
         if paths.is_empty() {
             return;
         }
-        // Check the taken flag while holding the same lock as the queue. This
-        // closes the race where `take_startup_paths` drains the queue between
-        // the flag check and `extend`, which would otherwise strand the new
-        // paths until the next app launch.
-        let emit_paths = match self.paths.lock() {
-            Ok(mut pending) => {
-                if self.taken.load(Ordering::SeqCst) {
-                    Some(paths)
-                } else {
-                    pending.extend(paths);
-                    None
-                }
-            }
-            Err(_) => Some(paths),
-        };
-        if let Some(paths) = emit_paths {
+        // 无论前端是否就绪都先入队。事件可能撞上 React 的订阅重建窗口，
+        // 只发事件不保留副本仍会把系统打开请求永久丢掉。
+        if self.enqueue(&paths) {
             emit_open_paths(app, paths);
         }
     }
+
+    fn enqueue(&self, paths: &[String]) -> bool {
+        let mut pending = match self.paths.lock() {
+            Ok(pending) => pending,
+            // 路径队列只有 append/take，没有需要回滚的不变量；中毒后保留数据
+            // 比把一次系统打开请求静默丢掉更安全。
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        pending.extend(paths.iter().cloned());
+        self.frontend_ready.load(Ordering::SeqCst)
+    }
+
+    fn drain(&self) -> Vec<String> {
+        // 先标记再拿锁：并发入队要么发生在此之前并被本次排空，要么看到 ready
+        // 后发出事件；不会出现“刚排空、尚未 ready”而永久滞留的窗口。
+        self.frontend_ready.store(true, Ordering::SeqCst);
+        let mut pending = match self.paths.lock() {
+            Ok(pending) => pending,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        std::mem::take(&mut *pending)
+    }
 }
 
-/// 前端就绪后调用一次，取走启动时待打开的文件。
+/// 排空当前待打开路径。可重复调用；事件到达时前端也通过它取数据。
 #[tauri::command]
 pub fn take_startup_paths(pending: tauri::State<'_, PendingOpenPaths>) -> Vec<String> {
-    pending.taken.store(true, Ordering::SeqCst);
-    pending
-        .paths
-        .lock()
-        .map(|mut paths| std::mem::take(&mut *paths))
-        .unwrap_or_default()
+    pending.drain()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -118,14 +122,11 @@ mod tests {
     }
 
     #[test]
-    fn 取走一次之后队列就空了() {
+    fn 排空后仍可接收下一批路径() {
         let pending = PendingOpenPaths::new(vec!["a.txt".into()]);
-        assert_eq!(
-            pending.paths.lock().expect("锁").len(),
-            1,
-            "构造时应当带上启动路径"
-        );
-        pending.taken.store(true, Ordering::SeqCst);
-        assert!(pending.taken.load(Ordering::SeqCst));
+        assert_eq!(pending.drain(), vec!["a.txt"]);
+        assert!(pending.enqueue(&["b.md".into()]));
+        assert_eq!(pending.drain(), vec!["b.md"]);
+        assert!(pending.drain().is_empty());
     }
 }
