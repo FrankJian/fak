@@ -401,6 +401,8 @@ mod tests {
 
     #[cfg(windows)]
     fn sleep_command() -> &'static str {
-        "timeout.exe /T 30 /NOBREAK"
+        // `timeout.exe` exits immediately when stdin is redirected (the executor pipes stdin),
+        // so use PowerShell's process-independent sleep for a deterministic child timeout.
+        "powershell.exe -NoProfile -NonInteractive -Command \"Start-Sleep -Seconds 30\""
     }
 }
