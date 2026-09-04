@@ -324,7 +324,7 @@ export const enUS: Record<MessageKey, string> = {
 
   "settings.autoCheckUpdates.label": "Check for updates automatically",
   "settings.autoCheckUpdates.description":
-    "At most once a day. Only the version manifest is requested; no machine information is sent.",
+    "Off by default. When enabled, checks at startup at most once a day. Only the version manifest is requested; no machine information is sent.",
   "settings.updateIgnoreSystemProxy.label": "Ignore system proxy",
   "settings.updateIgnoreSystemProxy.description":
     "Connect directly when checking for updates, ignoring both the system proxy and the proxy below.",

@@ -14,6 +14,15 @@ import {
 const translate = (key: keyof typeof messages) => messages[key];
 
 describe("设置项清单", () => {
+  it("自动检查更新默认关闭", () => {
+    const setting = SETTINGS.find(
+      (item) => item.id === "autoCheckUpdates",
+    );
+
+    expect(DEFAULT_CONFIG.autoCheckUpdates).toBe(false);
+    expect(setting?.defaultValue).toBe(false);
+  });
+
   it("每一项的文案 key 在字典里都存在", () => {
     for (const setting of SETTINGS) {
       expect(messages[setting.labelKey], setting.id).toBeTruthy();

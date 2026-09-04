@@ -304,7 +304,7 @@ export const zhCN = {
 
   "settings.autoCheckUpdates.label": "自动检查更新",
   "settings.autoCheckUpdates.description":
-    "每天最多检查一次，只请求版本清单，不会上传任何本机信息。",
+    "默认关闭。开启后会在启动软件时检查，每天最多一次；只请求版本清单，不会上传任何本机信息。",
   "settings.updateIgnoreSystemProxy.label": "忽略系统代理",
   "settings.updateIgnoreSystemProxy.description":
     "开启后检查更新直连，不使用系统代理，也不使用下方填写的代理。",

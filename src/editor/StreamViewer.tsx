@@ -28,6 +28,8 @@ import { StreamReplaceDialog } from "../panels/StreamReplaceDialog";
 const LINE_HEIGHT = 20;
 const OVERSCAN = 120;
 const CACHE_LIMIT = 2_000;
+/** 空层必须复用引用，否则每次滚动渲染都会让小地图误判静态数据已变化。 */
+const EMPTY_MINIMAP_DATA: readonly [] = [];
 
 export interface StreamViewerHandle {
   revealLine: (line: number) => void;
@@ -77,6 +79,7 @@ export function StreamViewer({
     scrollToEnd,
     isAtBottom,
   });
+  const noteTailScroll = follow.noteScroll;
   const lineCount = follow.lineCount;
 
   const fetchWindow = useCallback(
@@ -140,6 +143,25 @@ export function StreamViewer({
     const fetchEnd = Math.min(lineCount, end + OVERSCAN);
     void fetchWindow(fetchStart, fetchEnd - fetchStart);
   }, [fetchWindow, lineCount]);
+
+  const scrollFrameRef = useRef<number | null>(null);
+  const scheduleScrollUpdate = useCallback(() => {
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      updateRange();
+      noteTailScroll();
+    });
+  }, [noteTailScroll, updateRange]);
+
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current === null) return;
+      window.cancelAnimationFrame(scrollFrameRef.current);
+      scrollFrameRef.current = null;
+    },
+    [scheduleScrollUpdate],
+  );
 
   useEffect(() => {
     void fetchWindow(0, Math.min(lineCount, 40 + OVERSCAN));
@@ -270,10 +292,7 @@ export function StreamViewer({
               : "min-h-0 min-w-0 flex-1 overflow-auto"
           }
           aria-label={t("stream.content")}
-          onScroll={() => {
-            updateRange();
-            follow.noteScroll();
-          }}
+          onScroll={scheduleScrollUpdate}
         >
           <div
             style={{ height: lineCount * LINE_HEIGHT, position: "relative" }}
@@ -293,9 +312,9 @@ export function StreamViewer({
             totalLines={lineCount}
             scrollProgress={minimapScroll.progress}
             viewportFraction={minimapScroll.viewportFraction}
-            density={[]}
+            density={EMPTY_MINIMAP_DATA}
             matches={find.matches}
-            changes={[]}
+            changes={EMPTY_MINIMAP_DATA}
             autohide={minimapAutohide}
             onScrollProgress={(progress) => {
               const viewport = viewportRef.current;

@@ -99,12 +99,6 @@ export interface Config {
   previewBlockRemoteImages: boolean;
   pasteImageMode: PasteImageMode;
 
-  /**
-   * 更新代理（SPEC §12.3.2）。代理串可能带账号密码，只落配置文件，绝不进日志。
-   *
-   * 自动检查开关与版本记账字段暂不在此：updater 插件尚未注册，
-   * 加了也没人读，那就成了「拨了不生效」的开关。
-   */
   /** 小地图（SPEC §4.1 能力表） */
   minimap: boolean;
   minimapAutohide: boolean;
@@ -112,6 +106,7 @@ export interface Config {
   quickAccessBarVisible: boolean;
   /** 单实例（SPEC §12.5）。改后需重启生效 */
   singleInstance: boolean;
+  /** 更新代理（SPEC §12.3.2）。代理串可能带账号密码，只落配置文件，绝不进日志。 */
   updateProxyServer: string;
   updateIgnoreSystemProxy: boolean;
   autoCheckUpdates: boolean;
@@ -196,7 +191,7 @@ export const DEFAULT_CONFIG: Config = {
   singleInstance: true,
   updateProxyServer: "",
   updateIgnoreSystemProxy: false,
-  autoCheckUpdates: true,
+  autoCheckUpdates: false,
   lastUpdateCheckAt: 0,
   lastSeenVersion: "",
   skippedVersion: "",

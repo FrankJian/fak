@@ -15,6 +15,14 @@ import {
   viewportRectFromScroll,
 } from "../lib/minimap";
 
+interface CanvasSize {
+  width: number;
+  height: number;
+  ratio: number;
+}
+
+const EMPTY_CANVAS_SIZE: CanvasSize = { width: 0, height: 0, ratio: 1 };
+
 export interface MinimapMark {
   line: number;
 }
@@ -52,8 +60,40 @@ export function Minimap({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hovered, setHovered] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [canvasSize, setCanvasSize] = useState<CanvasSize>(EMPTY_CANVAS_SIZE);
   const draggingRef = useRef(false);
   const dragOffsetRef = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const measure = () => {
+      const next = {
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
+        ratio: window.devicePixelRatio || 1,
+      };
+      setCanvasSize((previous) =>
+        previous.width === next.width &&
+        previous.height === next.height &&
+        previous.ratio === next.ratio
+          ? previous
+          : next,
+      );
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
+    observer?.observe(canvas);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -61,20 +101,20 @@ export function Minimap({
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    // 画布像素尺寸要跟着容器与 DPR 走，否则高分屏上是糊的
-    const ratio = window.devicePixelRatio || 1;
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
+    const { width, height, ratio } = canvasSize;
     if (width === 0 || height === 0) return;
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
+    const pixelWidth = Math.round(width * ratio);
+    const pixelHeight = Math.round(height * ratio);
+    // 设置 width / height 会重置整个 2D 上下文。只在尺寸或 DPR 真正变化时设置，
+    // 避免滚动期间反复释放并重建画布后备缓冲。
+    if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+    if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
 
     const textColor = cssColor(canvas, "--text-tertiary");
     const matchColor = cssColor(canvas, "--accent");
     const changeColor = cssColor(canvas, "--diff-modify-gutter");
-    const viewportColor = cssColor(canvas, "--bg-hover");
 
     context.fillStyle = textColor;
     resampleDensity(density, Math.ceil(height)).forEach((value, y) => {
@@ -93,25 +133,12 @@ export function Minimap({
     for (const mark of matches) {
       context.fillRect(width - 3, lineToY(mark.line, totalLines, height), 3, 2);
     }
-
-    const rect = viewportRectFromScroll(
-      scrollProgress,
-      viewportFraction,
-      height,
-    );
-    context.fillStyle = viewportColor;
-    context.globalAlpha = dragging ? 0.8 : hovered ? 0.65 : 0.5;
-    context.fillRect(0, rect.top, width, rect.height);
-    context.globalAlpha = 1;
   }, [
     totalLines,
-    scrollProgress,
-    viewportFraction,
     density,
     matches,
     changes,
-    hovered,
-    dragging,
+    canvasSize,
   ]);
 
   const scrollFromPointer = (clientY: number) => {
@@ -136,6 +163,11 @@ export function Minimap({
   };
 
   const visible = !autohide || hovered || dragging;
+  const viewport = viewportRectFromScroll(
+    scrollProgress,
+    viewportFraction,
+    canvasSize.height,
+  );
 
   return (
     <div
@@ -193,6 +225,17 @@ export function Minimap({
         onLostPointerCapture={() => {
           draggingRef.current = false;
           setDragging(false);
+        }}
+      />
+      <div
+        data-minimap-viewport
+        aria-hidden="true"
+        className="pointer-events-none absolute left-0 top-0 w-full bg-[var(--bg-hover)] transition-opacity"
+        style={{
+          height: `${viewport.height}px`,
+          opacity: visible ? (dragging ? 0.8 : hovered ? 0.65 : 0.5) : 0,
+          transform: `translateY(${viewport.top}px)`,
+          transitionDuration: "var(--duration-fast)",
         }}
       />
     </div>

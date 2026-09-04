@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import { SettingsWindow } from "./SettingsWindow";
 
 describe("SettingsWindow", () => {
+  it("更新设置显示默认关闭的自动检查开关", () => {
+    render(
+      <SettingsWindow
+        initialGroup="updates"
+        onOpenFile={vi.fn()}
+        onCheckForUpdates={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("switch", { name: "自动检查更新" }),
+    ).toHaveAttribute("aria-checked", "false");
+  });
+
   it("快捷键配置与其他分组共用侧栏并可直接切换", () => {
     render(
       <SettingsWindow

@@ -300,7 +300,7 @@ impl Default for Config {
             paste_image_mode: PasteImageMode::AssetFile,
             update_proxy_server: String::new(),
             update_ignore_system_proxy: false,
-            auto_check_updates: true,
+            auto_check_updates: false,
             last_update_check_at: 0,
             last_seen_version: String::new(),
             skipped_version: String::new(),
@@ -560,6 +560,12 @@ mod tests {
         assert!(raw.is_empty());
         assert!(quarantined.is_none());
         assert_eq!(from_map(&raw).config, Config::default());
+    }
+
+    #[test]
+    fn automatic_update_checks_default_to_off() {
+        assert!(!Config::default().auto_check_updates);
+        assert!(!from_map(&Map::new()).config.auto_check_updates);
     }
 
     // SPEC 9.3 第 1、2 条：一个字段写错不该让其余配置一起失效

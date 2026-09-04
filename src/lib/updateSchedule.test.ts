@@ -22,11 +22,14 @@ describe("自动检查触发判定", () => {
     });
   });
 
-  it("关闭自动检查后不检查", () => {
-    expect(decideAutoCheck({ ...base, autoCheckUpdates: false })).toEqual({
-      check: false,
-      reason: "disabled",
-    });
+  it("关闭自动检查后启动不检查，即使刚升级过", () => {
+    expect(
+      decideAutoCheck({
+        ...base,
+        autoCheckUpdates: false,
+        lastSeenVersion: "older",
+      }),
+    ).toEqual({ check: false, reason: "disabled" });
   });
 
   it("刚升级过时强制检查，不受 24h 节流限制", () => {

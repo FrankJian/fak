@@ -1,6 +1,6 @@
 // @ts-expect-error Vitest 在 Node 中运行 CSS 守卫；前端产物刻意不引入 Node 类型。
 import { readFileSync } from "node:fs";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Minimap } from "./Minimap";
 
@@ -103,5 +103,53 @@ describe("Minimap layout", () => {
     fireEvent.pointerMove(minimap, { pointerId: 1, clientY: 90 });
 
     expect(onScrollProgress).toHaveBeenLastCalledWith(1);
+  });
+
+  it("moves the viewport layer without repainting the static canvas", async () => {
+    const context = {
+      setTransform: vi.fn(),
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      fillStyle: "",
+      globalAlpha: 1,
+    } as unknown as CanvasRenderingContext2D;
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      context,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "clientWidth", "get").mockReturnValue(
+      64,
+    );
+    vi.spyOn(
+      HTMLCanvasElement.prototype,
+      "clientHeight",
+      "get",
+    ).mockReturnValue(200);
+
+    const props = {
+      totalLines: 100,
+      viewportFraction: 0.2,
+      density: [0.5],
+      matches: [{ line: 20 }],
+      changes: [{ line: 40 }],
+      autohide: false,
+      onScrollProgress: vi.fn(),
+    };
+    const { container, rerender } = render(
+      <Minimap {...props} scrollProgress={0} />,
+    );
+
+    await waitFor(() => expect(context.fillRect).toHaveBeenCalled());
+    const paintedRects = vi.mocked(context.fillRect).mock.calls.length;
+
+    rerender(<Minimap {...props} scrollProgress={0.5} />);
+
+    const viewport = container.querySelector<HTMLElement>(
+      "[data-minimap-viewport]",
+    );
+    expect(viewport).toHaveStyle({
+      height: "40px",
+      transform: "translateY(80px)",
+    });
+    expect(context.fillRect).toHaveBeenCalledTimes(paintedRects);
   });
 });
