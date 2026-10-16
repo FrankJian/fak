@@ -105,6 +105,7 @@ import Minus from "lucide-react/icons/minus";
 import Monitor from "lucide-react/icons/monitor";
 import Moon from "lucide-react/icons/moon";
 import Package from "lucide-react/icons/package";
+import Pencil from "lucide-react/icons/pencil";
 import Palette from "lucide-react/icons/palette";
 import PanelBottom from "lucide-react/icons/panel-bottom";
 import PanelLeft from "lucide-react/icons/panel-left";
@@ -167,6 +168,7 @@ export const icons = {
   recent: History,
   reload: RefreshCw,
   delete: Trash2,
+  rename: Pencil,
   restore: RotateCcw,
 
   // —— 编辑

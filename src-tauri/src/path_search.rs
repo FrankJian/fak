@@ -258,7 +258,7 @@ fn find_file_matches(
         previous_end = found.end();
 
         if used
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
                 (count < MAX_RESULTS).then_some(count + 1)
             })
             .is_err()

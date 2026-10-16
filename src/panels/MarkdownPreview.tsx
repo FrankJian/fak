@@ -1,14 +1,5 @@
-/**
- * Markdown HTML 只来自 Rust 的 `render_markdown_preview`：它完成解析与净化，
- * 这里绝不重新净化或自行解析，以免两套安全规则漂移（SPEC F8.1）。
- */
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent,
-} from "react";
+/** Markdown HTML 只由 Rust 解析净化，避免前后端安全规则漂移（SPEC F8.1）。 */
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type UIEvent } from "react";
 import { IconButton } from "../design/components/IconButton";
 import { useTranslation } from "../i18n/useTranslation";
 import { renderMarkdownPreview } from "../ipc/markdown";
@@ -17,40 +8,48 @@ import { assetUrl } from "../ipc/assets";
 import { isTauriAvailable } from "../ipc/invoke";
 import { renderDiagrams, renderMath } from "./markdownPostProcess";
 import { logger } from "../lib/logger";
+import { findMarkdownFragmentTarget, resolveMarkdownLink, resolveMarkdownLinkFromDirectory } from "../lib/markdownLinks";
 import {
   MARKDOWN_SYNC_SCROLL_MS,
   markdownPreviewScrollTop,
+  markdownScrollPoints,
+  previewTopForSourceLine,
+  sourceLineForPreviewTop,
 } from "../lib/markdownPreviewScroll";
 
 const RENDER_DEBOUNCE_MS = 140;
-
-/**
- * 按标签缓存已渲染的 HTML（SPEC F8.1）。
- *
- * 模块级而不是组件 state：切回上一个标签时组件已经重建了，
- * 放在 state 里的缓存随之丢失，每次切标签都要白白重渲染一次。
- */
+/** 模块级缓存跨标签组件重建保留 HTML，避免切回时重复渲染（SPEC F8.1）。 */
 const renderedCache = new Map<string, string>();
 
 interface MarkdownPreviewProps {
   documentId: string;
+  documentPath: string | null;
   /** 每次正文编辑递增；正文不进 Zustand，避免复制大文本（SPEC P1）。 */
   revision: number;
   /** Tier B 只允许手动刷新，Tier A 才做实时预览（SPEC §4.1）。 */
   autoRefresh: boolean;
   /** 编辑器视口首行（0 基），预览跟着它走（SPEC F8.1 步骤 6） */
   topLine: number;
+  sourceScrollProgress: number;
+  lineCount: number;
   syncScroll: boolean;
   blockRemoteImages: boolean;
+  onOpenDocument: (path: string) => void;
+  onPreviewTopLineChange: (line: number) => void;
 }
 
 export function MarkdownPreview({
   documentId,
+  documentPath,
   revision,
   autoRefresh,
   topLine,
+  sourceScrollProgress,
+  lineCount,
   syncScroll,
   blockRemoteImages,
+  onOpenDocument,
+  onPreviewTopLineChange,
 }: MarkdownPreviewProps) {
   const { t } = useTranslation();
   const [html, setHtml] = useState(() => renderedCache.get(documentId) ?? "");
@@ -62,11 +61,45 @@ export function MarkdownPreview({
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLElement>(null);
   const scrollFrameRef = useRef<number | null>(null);
+  const programmaticScrollRef = useRef(false);
+  const releaseScrollFrameRef = useRef<number | null>(null);
+  const lastPreviewLineRef = useRef<number | null>(null);
+  const previewDriveUntilRef = useRef(0);
+  const previewSourceLineRef = useRef<number | null>(null);
+  const scrollPointsRef = useRef<ReturnType<typeof markdownScrollPoints>>([]);
+  const measureScrollPoints = useCallback(() => {
+    const container = contentRef.current;
+    const scroller = scrollerRef.current;
+    if (!container || !scroller) return;
+    const scrollerTop = scroller.getBoundingClientRect().top;
+    const anchors = Array.from(container.querySelectorAll<HTMLElement>("[data-line]"), (anchor) => ({
+      line: Number(anchor.dataset.line),
+      top: anchor.getBoundingClientRect().top - scrollerTop + scroller.scrollTop,
+    }));
+    scrollPointsRef.current = markdownScrollPoints(anchors, lineCount, scroller.scrollHeight - scroller.clientHeight);
+  }, [lineCount]);
+
+  useEffect(() => {
+    const container = contentRef.current;
+    const scroller = scrollerRef.current;
+    if (!container || !scroller) return;
+    measureScrollPoints();
+    const observer = new ResizeObserver(measureScrollPoints);
+    observer.observe(container);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [html, loading, measureScrollPoints]);
 
   const stopScrollAnimation = useCallback(() => {
-    if (scrollFrameRef.current === null) return;
-    window.cancelAnimationFrame(scrollFrameRef.current);
-    scrollFrameRef.current = null;
+    if (scrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollFrameRef.current);
+      scrollFrameRef.current = null;
+    }
+    if (releaseScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(releaseScrollFrameRef.current);
+      releaseScrollFrameRef.current = null;
+    }
+    programmaticScrollRef.current = false;
   }, []);
 
   const refresh = useCallback(async () => {
@@ -98,7 +131,27 @@ export function MarkdownPreview({
     if (!anchor) return;
     event.preventDefault();
     const href = anchor.getAttribute("href");
-    if (!href || href.startsWith("#")) return;
+    const localHref = anchor.dataset.localHref;
+    if (localHref) {
+      const path = documentPath
+        ? resolveMarkdownLink(documentPath, localHref)
+        : anchor.dataset.localDir
+          ? resolveMarkdownLinkFromDirectory(anchor.dataset.localDir, localHref)
+          : null;
+      if (path) onOpenDocument(path);
+      return;
+    }
+    if (href?.startsWith("#")) {
+      const container = contentRef.current;
+      const scroller = scrollerRef.current;
+      const target = container && findMarkdownFragmentTarget(container, href);
+      if (container && scroller && target) {
+        stopScrollAnimation();
+        scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      }
+      return;
+    }
+    if (!href) return;
     void openExternalUrl(href).catch((error: unknown) =>
       logger.warn("opening preview link failed", error),
     );
@@ -135,20 +188,31 @@ export function MarkdownPreview({
   // 从当前位置重定向，连续滚动时不会积压一长串动画。
   useEffect(() => {
     if (!syncScroll || loading || failed) return;
-    const container = contentRef.current;
     const scroller = scrollerRef.current;
-    if (!container || !scroller) return;
-    const anchor = nearestAnchor(container, topLine + 1);
-    if (!anchor) return;
-    const target =
-      anchor.getBoundingClientRect().top -
-      container.getBoundingClientRect().top;
+    if (!scroller) return;
+    if (performance.now() < previewDriveUntilRef.current) {
+      previewSourceLineRef.current = topLine;
+      return;
+    }
+    if (lastPreviewLineRef.current === topLine || previewSourceLineRef.current === topLine) {
+      return;
+    }
+    lastPreviewLineRef.current = null;
+    previewSourceLineRef.current = null;
+    const target = sourceScrollProgress >= 0.999
+      ? Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+      : previewTopForSourceLine(topLine, scrollPointsRef.current);
     stopScrollAnimation();
+    programmaticScrollRef.current = true;
     if (
       Math.abs(target - scroller.scrollTop) < 1 ||
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     ) {
       scroller.scrollTop = target;
+      releaseScrollFrameRef.current = window.requestAnimationFrame(() => {
+        programmaticScrollRef.current = false;
+        releaseScrollFrameRef.current = null;
+      });
       return;
     }
 
@@ -160,6 +224,10 @@ export function MarkdownPreview({
       if (elapsed >= MARKDOWN_SYNC_SCROLL_MS) {
         scroller.scrollTop = target;
         scrollFrameRef.current = null;
+        releaseScrollFrameRef.current = window.requestAnimationFrame(() => {
+          programmaticScrollRef.current = false;
+          releaseScrollFrameRef.current = null;
+        });
         return;
       }
       scrollFrameRef.current = window.requestAnimationFrame(tick);
@@ -169,11 +237,20 @@ export function MarkdownPreview({
   }, [
     syncScroll,
     topLine,
+    sourceScrollProgress,
     html,
     loading,
     failed,
     stopScrollAnimation,
   ]);
+
+  const handlePreviewScroll = (event: UIEvent<HTMLElement>) => {
+    if (!syncScroll || programmaticScrollRef.current) return;
+    const line = sourceLineForPreviewTop(event.currentTarget.scrollTop, scrollPointsRef.current);
+    lastPreviewLineRef.current = line;
+    previewDriveUntilRef.current = performance.now() + 220;
+    onPreviewTopLineChange(line);
+  };
 
   useEffect(() => stopScrollAnimation, [stopScrollAnimation]);
 
@@ -185,6 +262,7 @@ export function MarkdownPreview({
       onClick={openLink}
       onPointerDown={stopScrollAnimation}
       onWheel={stopScrollAnimation}
+      onScroll={handlePreviewScroll}
     >
       {!autoRefresh && (
         <div className="flex h-[var(--h-toolbar)] items-center justify-between border-b border-[var(--border-subtle)] px-[var(--space-2)]">
@@ -218,18 +296,4 @@ export function MarkdownPreview({
       )}
     </aside>
   );
-}
-
-/** 找到行号不超过 `line` 的最后一个锚点：块之间的行落在它所属的块上。 */
-function nearestAnchor(
-  container: HTMLElement,
-  line: number,
-): HTMLElement | null {
-  const anchors = container.querySelectorAll<HTMLElement>("[data-line]");
-  let best: HTMLElement | null = null;
-  for (const anchor of anchors) {
-    if (Number(anchor.dataset.line) <= line) best = anchor;
-    else break;
-  }
-  return best;
 }

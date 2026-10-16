@@ -29,6 +29,7 @@ import { useAppStore } from "../store/appStore";
 import { useDocumentStore } from "../store/documentStore";
 import { logger } from "../lib/logger";
 import { noteRecentFile } from "../lib/quickOpen";
+import { sameFilePath } from "../lib/workspacePath";
 
 export interface WorkspaceState {
   text: string;
@@ -77,6 +78,7 @@ export function useWorkspace(): WorkspaceState {
     addTab,
     updateMeta,
     updateLocation,
+    clearMissingOnDisk,
     closeTab,
     tabs,
     activeId,
@@ -175,26 +177,45 @@ export function useWorkspace(): WorkspaceState {
     try {
       const selected = await pickFileToOpen();
       if (selected === null) return;
-      await load(await openFile(selected), selected);
+      const existing = useDocumentStore.getState().tabs.find(
+        (tab) => tab.path && sameFilePath(tab.path, selected),
+      );
+      if (existing) {
+        await activateDocument(existing.meta.documentId);
+        return;
+      }
+      const meta = await openFile(selected);
+      if (useDocumentStore.getState().tabs.some((tab) => tab.meta.documentId === meta.documentId)) {
+        await activateDocument(meta.documentId);
+        return;
+      }
+      await load(meta, selected);
     } catch (error) {
       report(error);
     }
-  }, [load, report]);
+  }, [activateDocument, load, report]);
 
   const openAtPath = useCallback(
     async (path: string) => {
-      const existing = tabs.find((tab) => tab.path === path);
+      const existing = useDocumentStore.getState().tabs.find(
+        (tab) => tab.path && sameFilePath(tab.path, path),
+      );
       if (existing) {
         await activateDocument(existing.meta.documentId);
         return;
       }
       try {
-        await load(await openFile(path), path);
+        const meta = await openFile(path);
+        if (useDocumentStore.getState().tabs.some((tab) => tab.meta.documentId === meta.documentId)) {
+          await activateDocument(meta.documentId);
+          return;
+        }
+        await load(meta, path);
       } catch (error) {
         report(error);
       }
     },
-    [activateDocument, load, report, tabs],
+    [activateDocument, load, report],
   );
 
   const createNew = useCallback(
@@ -235,6 +256,7 @@ export function useWorkspace(): WorkspaceState {
       } else {
         updateMeta(meta);
       }
+      clearMissingOnDisk(activeMeta.documentId);
       // 正常保存后立刻清掉备份（SPEC F1.6 步骤 4）：内容已经在磁盘上了，
       // 留着只会让下次崩溃后弹出一条毫无意义的恢复提示
       await discardBackup(activeMeta.documentId);
@@ -250,7 +272,7 @@ export function useWorkspace(): WorkspaceState {
       report(error);
       return false;
     }
-  }, [activeMeta, noteRecent, report, updateLocation, updateMeta]);
+  }, [activeMeta, clearMissingOnDisk, noteRecent, report, updateLocation, updateMeta]);
 
   const saveAs = useCallback(async (): Promise<boolean> => {
     if (!activeMeta || activeMeta.mode === "stream") return false;
@@ -275,12 +297,13 @@ export function useWorkspace(): WorkspaceState {
       updateMeta(
         await saveDocument(saveConflict.documentId, { overwrite: true }),
       );
+      clearMissingOnDisk(saveConflict.documentId);
       await discardBackup(saveConflict.documentId);
       setSaveConflict(null);
     } catch (error) {
       report(error);
     }
-  }, [report, saveConflict, updateMeta]);
+  }, [clearMissingOnDisk, report, saveConflict, updateMeta]);
 
   const promoteStream = useCallback(async () => {
     if (!activeMeta || activeMeta.mode !== "stream") return;

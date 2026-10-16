@@ -6,6 +6,7 @@ import { create } from "zustand";
 import type { DocumentMeta } from "../ipc/documents";
 import type { SyncStatus } from "../ipc/editSync";
 import type { SyntaxSelection } from "../lib/syntaxKey";
+import { pathIsWithin } from "../lib/workspacePath";
 
 export interface ViewportAnchor {
   line: number;
@@ -24,6 +25,8 @@ export interface Tab {
    * 所以崩溃恢复挂进来的文档这里是 `null`。快速打开与最近文件都要容忍这一点。
    */
   path: string | null;
+  /** 文件树删除了此文件或它的父目录；正文仍留在内存中供用户决定如何处理。 */
+  missingOnDisk?: boolean;
   /** 编辑器卸载时留下的光标行与视口首行，供会话保存与标签重建使用。 */
   viewportAnchor: ViewportAnchor;
   /** 锁定只保护快捷关闭与批量关闭；显式点击关闭按钮仍可关闭。 */
@@ -42,6 +45,9 @@ interface DocumentState {
   /** 另存为成功后，元数据与完整路径必须原子切换到新文件。 */
   updateLocation: (meta: DocumentMeta, path: string) => void;
   renamePaths: (source: string, destination: string) => void;
+  markDeletedPaths: (path: string) => void;
+  markDeletedIds: (documentIds: readonly string[]) => void;
+  clearMissingOnDisk: (documentId: string) => void;
   setViewportAnchor: (documentId: string, anchor: ViewportAnchor) => void;
   setFoldedLines: (documentId: string, lines: readonly number[]) => void;
   setSyntaxOverride: (
@@ -131,7 +137,37 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((tab) =>
         tab.meta.documentId === meta.documentId
-          ? { ...tab, meta, path, syntaxOverride: null }
+          ? { ...tab, meta, path, missingOnDisk: false, syntaxOverride: null }
+          : tab,
+      ),
+    })),
+
+  markDeletedPaths: (path) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.path && pathIsWithin(tab.path, path)
+          ? { ...tab, missingOnDisk: true }
+          : tab,
+      ),
+    })),
+
+  markDeletedIds: (documentIds) =>
+    set((state) => {
+      const ids = new Set(documentIds);
+      return {
+        tabs: state.tabs.map((tab) =>
+          ids.has(tab.meta.documentId)
+            ? { ...tab, missingOnDisk: true }
+            : tab,
+        ),
+      };
+    }),
+
+  clearMissingOnDisk: (documentId) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.meta.documentId === documentId && tab.missingOnDisk
+          ? { ...tab, missingOnDisk: false }
           : tab,
       ),
     })),

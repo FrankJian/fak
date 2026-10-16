@@ -186,6 +186,42 @@ describe("renamePaths", () => {
   });
 });
 
+describe("markDeletedPaths", () => {
+  it("marks an open file and open descendants when deleted from the file tree", () => {
+    useDocumentStore.setState({
+      tabs: [
+        { ...tab("a", 1), path: "C:/work/drafts/a.txt" },
+        { ...tab("b", 2), path: "C:/work/drafts/nested/b.txt" },
+        { ...tab("c", 3), path: "C:/work/other.txt" },
+      ],
+      activeId: "a",
+    });
+
+    useDocumentStore.getState().markDeletedPaths("c:\\work\\drafts");
+
+    expect(useDocumentStore.getState().tabs.map((item) => Boolean(item.missingOnDisk))).toEqual([
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it("marks a saved file by document ID when the save dialog used a path alias", () => {
+    useDocumentStore.setState({
+      tabs: [{ ...tab("saved", 1), path: "/alias/work/notes.md" }],
+      activeId: "saved",
+    });
+    useDocumentStore.getState().markDeletedPaths("/real/work/notes.md");
+    expect(useDocumentStore.getState().tabs[0]?.missingOnDisk).toBeFalsy();
+
+    useDocumentStore.getState().markDeletedIds(["saved"]);
+    expect(useDocumentStore.getState().tabs[0]?.missingOnDisk).toBe(true);
+
+    useDocumentStore.getState().clearMissingOnDisk("saved");
+    expect(useDocumentStore.getState().tabs[0]?.missingOnDisk).toBe(false);
+  });
+});
+
 describe("setViewportAnchor", () => {
   it("updates only the requested tab", () => {
     useDocumentStore.setState({

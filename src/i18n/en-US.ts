@@ -128,6 +128,7 @@ export const enUS: Record<MessageKey, string> = {
   "tab.contextMenu": "Tab menu",
   "tab.switchPrevious": "Switch to previous tab",
   "tab.unsaved": "Unsaved",
+  "tab.deletedOnDisk": "Deleted",
   "tab.untitled": "Untitled",
   "tab.closeOthers": "Close other tabs",
   "tab.closeToRight": "Close tabs to the right",

@@ -119,6 +119,19 @@ pub enum TrashOutcome {
     Unavailable,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashResult {
+    pub outcome: TrashOutcome,
+    pub document_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteResult {
+    pub document_ids: Vec<String>,
+}
+
 /// 只读取一个目录层级。路径先规范化，避免随后展开时从工作区根以外的相对路径起步。
 #[tauri::command]
 pub async fn list_directory(args: ListDirectoryArgs) -> AppResult<Vec<WorkspaceEntry>> {
@@ -175,21 +188,53 @@ pub async fn rename_workspace_entry(
 /// 默认删除路径：尽最大努力移入系统回收站，绝不在这里直接 unlink。
 /// 回收站不可用时，前端必须明确提示并再次确认，才可调用永久删除命令。
 #[tauri::command]
-pub async fn move_workspace_entry_to_trash(args: WorkspaceEntryArgs) -> AppResult<TrashOutcome> {
-    tauri::async_runtime::spawn_blocking(move || {
+pub async fn move_workspace_entry_to_trash(
+    args: WorkspaceEntryArgs,
+    state: tauri::State<'_, AppState>,
+) -> AppResult<TrashResult> {
+    let (outcome, path) = tauri::async_runtime::spawn_blocking(move || {
         move_workspace_entry_to_trash_sync(&args.root, &args.path)
     })
     .await
-    .map_err(|_| AppError::Io { os_code: None })?
+    .map_err(|_| AppError::Io { os_code: None })??;
+    Ok(TrashResult {
+        document_ids: if outcome == TrashOutcome::Moved {
+            affected_document_ids(&state, &path)?
+        } else {
+            Vec::new()
+        },
+        outcome,
+    })
 }
 
 #[tauri::command]
-pub async fn permanently_delete_workspace_entry(args: WorkspaceEntryArgs) -> AppResult<()> {
-    tauri::async_runtime::spawn_blocking(move || {
+pub async fn permanently_delete_workspace_entry(
+    args: WorkspaceEntryArgs,
+    state: tauri::State<'_, AppState>,
+) -> AppResult<DeleteResult> {
+    let path = tauri::async_runtime::spawn_blocking(move || {
         permanently_delete_workspace_entry_sync(&args.root, &args.path)
     })
     .await
-    .map_err(|_| AppError::Io { os_code: None })?
+    .map_err(|_| AppError::Io { os_code: None })??;
+    Ok(DeleteResult {
+        document_ids: affected_document_ids(&state, &path)?,
+    })
+}
+
+fn affected_document_ids(state: &AppState, deleted_path: &Path) -> AppResult<Vec<String>> {
+    let mut ids = Vec::new();
+    for entry in &state.documents {
+        let document = entry.read().map_err(|_| AppError::Io { os_code: None })?;
+        if document
+            .path
+            .as_deref()
+            .is_some_and(|path| path.starts_with(deleted_path))
+        {
+            ids.push(document.id.clone());
+        }
+    }
+    Ok(ids)
 }
 
 fn workspace_entry_path(root: &Path, path: &Path) -> AppResult<PathBuf> {
@@ -291,22 +336,25 @@ fn sync_document_paths_after_rename(state: &AppState, source: &Path, destination
     }
 }
 
-fn move_workspace_entry_to_trash_sync(root: &Path, path: &Path) -> AppResult<TrashOutcome> {
+fn move_workspace_entry_to_trash_sync(
+    root: &Path,
+    path: &Path,
+) -> AppResult<(TrashOutcome, PathBuf)> {
     let path = workspace_entry_path(root, path)?;
     match trash::delete(&path) {
-        Ok(()) => Ok(TrashOutcome::Moved),
-        Err(_) => Ok(TrashOutcome::Unavailable),
+        Ok(()) => Ok((TrashOutcome::Moved, path)),
+        Err(_) => Ok((TrashOutcome::Unavailable, path)),
     }
 }
 
-fn permanently_delete_workspace_entry_sync(root: &Path, path: &Path) -> AppResult<()> {
+fn permanently_delete_workspace_entry_sync(root: &Path, path: &Path) -> AppResult<PathBuf> {
     let path = workspace_entry_path(root, path)?;
     if path.is_dir() {
         std::fs::remove_dir_all(&path).map_err(|error| AppError::from_io(&error, &path))?;
     } else {
         std::fs::remove_file(&path).map_err(|error| AppError::from_io(&error, &path))?;
     }
-    Ok(())
+    Ok(path)
 }
 
 fn list_directory_sync(path: &PathBuf) -> AppResult<Vec<WorkspaceEntry>> {
@@ -461,7 +509,7 @@ mod tests {
         let file = directory.path().join("discard.txt");
         std::fs::write(&file, "discard").expect("文件");
 
-        let outcome =
+        let (outcome, _) =
             move_workspace_entry_to_trash_sync(directory.path(), &file).expect("移动到回收站");
 
         match outcome {
@@ -486,5 +534,29 @@ mod tests {
             Err(AppError::InvalidPath { .. })
         ));
         assert!(outside_file.exists());
+    }
+
+    #[test]
+    fn affected_documents_include_open_descendants_but_not_sibling_names() {
+        let state = AppState::default();
+        for (id, path) in [
+            ("a", "/work/drafts/a.txt"),
+            ("b", "/work/drafts/nested/b.txt"),
+            ("c", "/work/drafts-old/c.txt"),
+        ] {
+            state.documents.insert(
+                id.to_string(),
+                std::sync::RwLock::new(crate::state::Document::new(
+                    id.to_string(),
+                    Some(path.into()),
+                    "",
+                )),
+            );
+        }
+
+        let mut ids =
+            affected_document_ids(&state, Path::new("/work/drafts")).expect("读取已打开文档");
+        ids.sort();
+        assert_eq!(ids, vec!["a", "b"]);
     }
 }

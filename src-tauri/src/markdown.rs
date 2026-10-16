@@ -183,6 +183,16 @@ fn sanitize_urls(html: &str, options: &RenderOptions) -> String {
             } else {
                 out.push_str("=\"#\"");
             }
+        } else if name == "href" && local_markdown_href(value) {
+            out.push_str("=\"#\" data-local-href=\"");
+            // pulldown-cmark 已经把属性值转义过；二次转义会破坏含 & 的文件名。
+            out.push_str(value);
+            out.push('"');
+            if let Some(dir) = options.document_dir.as_ref() {
+                out.push_str(" data-local-dir=\"");
+                out.push_str(&escape_attribute(&dir.to_string_lossy()));
+                out.push('"');
+            }
         } else if name == "href" && !safe_href(value) {
             out.push_str("=\"#\"");
         } else {
@@ -233,7 +243,24 @@ fn local_image(value: &str, options: &RenderOptions) -> Option<String> {
 
 fn safe_href(value: &str) -> bool {
     let value = value.trim().to_ascii_lowercase();
-    value.starts_with("https:") || value.starts_with("http:") || value.starts_with("mailto:")
+    value.starts_with("https:")
+        || value.starts_with("http:")
+        || value.starts_with("mailto:")
+        || value.starts_with('#')
+}
+
+fn local_markdown_href(value: &str) -> bool {
+    let path = value.split(['?', '#']).next().unwrap_or("");
+    if path.is_empty()
+        || path.starts_with('/')
+        || path.starts_with('\\')
+        || path.contains(':')
+        || path.chars().any(char::is_control)
+    {
+        return false;
+    }
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".md") || lower.ends_with(".markdown")
 }
 
 fn safe_src(value: &str, options: &RenderOptions) -> bool {
@@ -265,6 +292,17 @@ mod tests {
         let html = render("[bad](javascript:alert(1)) [good](https://example.com)");
         assert!(!html.contains("javascript:"));
         assert!(html.contains("https://example.com"));
+    }
+
+    #[test]
+    fn local_markdown_links_are_clickable_without_webview_navigation() {
+        let html = render("[next](../notes/next.md#part) [unsafe](javascript:alert(1))");
+        assert!(html.contains("data-local-href=\"../notes/next.md#part\""));
+        assert!(!html.contains("javascript:"));
+        let with_ampersand = render("[file](a&b.md)");
+        assert!(with_ampersand.contains("data-local-href=\"a&amp;b.md\""));
+        let saved = with_dir("[next](../notes/next.md)", "/docs/guide");
+        assert!(saved.contains("data-local-dir=\"/docs/guide\""));
     }
 
     #[test]

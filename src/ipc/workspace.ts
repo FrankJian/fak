@@ -30,6 +30,14 @@ export interface WorkspaceIndexPage {
 }
 
 export type TrashOutcome = "moved" | "unavailable";
+export interface TrashResult {
+  outcome: TrashOutcome;
+  documentIds: string[];
+}
+
+export interface DeleteResult {
+  documentIds: string[];
+}
 
 /** 惰性读取单层目录；展开节点时才调用，绝不把整棵目录树塞进一次 IPC 响应。 */
 export function listDirectory(path: string): Promise<WorkspaceEntry[]> {
@@ -84,8 +92,8 @@ export function renameWorkspaceEntry(
 export function moveWorkspaceEntryToTrash(
   root: string,
   path: string,
-): Promise<TrashOutcome> {
-  return invoke<TrashOutcome>("move_workspace_entry_to_trash", {
+): Promise<TrashResult> {
+  return invoke<TrashResult>("move_workspace_entry_to_trash", {
     args: { root, path },
   });
 }
@@ -93,8 +101,8 @@ export function moveWorkspaceEntryToTrash(
 export function permanentlyDeleteWorkspaceEntry(
   root: string,
   path: string,
-): Promise<void> {
-  return invoke<void>("permanently_delete_workspace_entry", {
+): Promise<DeleteResult> {
+  return invoke<DeleteResult>("permanently_delete_workspace_entry", {
     args: { root, path },
   });
 }

@@ -101,6 +101,8 @@ export function useFileTree(
   onError: (error: unknown) => void,
 ): FileTreeController {
   const renamePaths = useDocumentStore((state) => state.renamePaths);
+  const markDeletedPaths = useDocumentStore((state) => state.markDeletedPaths);
+  const markDeletedIds = useDocumentStore((state) => state.markDeletedIds);
   const [root, setRoot] = useState<FileTreeNode | null>(null);
   const [loadingPath, setLoadingPath] = useState<string | null>(null);
   const rootRef = useRef(root);
@@ -333,25 +335,29 @@ export function useFileTree(
     async (path: string) => {
       const root = rootPath();
       if (!root) return "unavailable";
-      const outcome = await moveWorkspaceEntryToTrash(root, path);
+      const { outcome, documentIds } = await moveWorkspaceEntryToTrash(root, path);
       if (outcome === "moved") {
+        markDeletedPaths(path);
+        markDeletedIds(documentIds);
         const parent = path.replace(/[\\/][^\\/]+$/, "");
         await reloadDirectory(parent);
       }
       return outcome;
     },
-    [reloadDirectory, rootPath],
+    [markDeletedIds, markDeletedPaths, reloadDirectory, rootPath],
   );
 
   const permanentlyDelete = useCallback(
     async (path: string) => {
       const root = rootPath();
       if (!root) return;
-      await permanentlyDeleteWorkspaceEntry(root, path);
+      const { documentIds } = await permanentlyDeleteWorkspaceEntry(root, path);
+      markDeletedPaths(path);
+      markDeletedIds(documentIds);
       const parent = path.replace(/[\\/][^\\/]+$/, "");
       await reloadDirectory(parent);
     },
-    [reloadDirectory, rootPath],
+    [markDeletedIds, markDeletedPaths, reloadDirectory, rootPath],
   );
 
   return {

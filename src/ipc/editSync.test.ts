@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ChangeSet } from '@codemirror/state';
 import {
   applyChanges,
   EditSyncQueue,
@@ -62,13 +63,13 @@ describe('EditSyncQueue', () => {
     const { transport, sent } = makeTransport([]);
     const queue = new EditSyncQueue({ docId: 'd', transport, readText: () => '' });
 
-    queue.push([{ from: 0, to: 0, insert: 'a' }]);
-    queue.push([{ from: 1, to: 1, insert: 'b' }]);
+    queue.push(ChangeSet.of({ from: 0, insert: 'a' }, 0));
+    queue.push(ChangeSet.of({ from: 1, insert: 'b' }, 1));
     await vi.advanceTimersByTimeAsync(20);
     vi.useRealTimers();
 
     expect(sent).toHaveLength(1);
-    expect(sent[0].changes).toHaveLength(2);
+    expect(sent[0].changes).toEqual([{ from: 0, to: 0, insert: 'ab' }]);
     expect(sent[0].seq).toBe(1);
     expect(sent[0].baseVersion).toBe(0);
   });
@@ -77,7 +78,7 @@ describe('EditSyncQueue', () => {
     const { transport, sent } = makeTransport([]);
     const queue = new EditSyncQueue({ docId: 'd', transport, readText: () => '' });
 
-    queue.push([{ from: 0, to: 0, insert: 'x' }]);
+    queue.push(ChangeSet.of({ from: 0, insert: 'x' }, 0));
     await queue.flush();
 
     expect(sent).toHaveLength(1);
@@ -90,7 +91,7 @@ describe('EditSyncQueue', () => {
     const queue = new EditSyncQueue({ docId: 'd', transport, readText: () => '' });
 
     queue.setComposing(true);
-    queue.push([{ from: 0, to: 0, insert: '中' }]);
+    queue.push(ChangeSet.of({ from: 0, insert: '中' }, 0));
     await vi.advanceTimersByTimeAsync(50);
     expect(sent).toHaveLength(0);
 
@@ -100,12 +101,27 @@ describe('EditSyncQueue', () => {
     expect(sent).toHaveLength(1);
   });
 
+  it('拼音组合中的连续替换以组合前坐标下发，保存正文与屏幕一致', async () => {
+    const { transport, sent } = makeTransport([]);
+    const queue = new EditSyncQueue({ docId: 'd', transport, readText: () => 'nihao' });
+    queue.setComposing(true);
+    queue.push(ChangeSet.of({ from: 0, insert: 'nin' }, 0));
+    queue.push(ChangeSet.of({ from: 0, to: 3, insert: "nin'hao" }, 3));
+    queue.push(ChangeSet.of({ from: 0, to: 7, insert: 'nihao' }, 7));
+    queue.setComposing(false);
+
+    await queue.flush();
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].changes).toEqual([{ from: 0, to: 0, insert: 'nihao' }]);
+  });
+
   it('flush 在组合期间等待结束而不是忙等卡死', async () => {
     const { transport, sent } = makeTransport([]);
     const queue = new EditSyncQueue({ docId: 'd', transport, readText: () => '' });
 
     queue.setComposing(true);
-    queue.push([{ from: 0, to: 0, insert: 'pinyin' }]);
+    queue.push(ChangeSet.of({ from: 0, insert: 'pinyin' }, 0));
     let settled = false;
     const flush = queue.flush().then(() => {
       settled = true;
@@ -121,6 +137,21 @@ describe('EditSyncQueue', () => {
     expect(queue.getStatus()).toBe('idle');
   });
 
+  it('即使组合尚无变更，保存闸门也等最终输入事务', async () => {
+    const { transport, sent } = makeTransport([]);
+    const queue = new EditSyncQueue({ docId: 'd', transport, readText: () => 'nihao' });
+    queue.setComposing(true);
+    let settled = false;
+    const flush = queue.flush().then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    queue.push(ChangeSet.of({ from: 0, insert: 'nihao' }, 0));
+    queue.setComposing(false);
+    await flush;
+    expect(sent[0].changes).toEqual([{ from: 0, to: 0, insert: 'nihao' }]);
+  });
+
   it('被拒绝时进入 resync 并用前端全文对齐', async () => {
     const { transport, resyncs } = makeTransport([
       { ok: false, reason: 'gap', serverVersion: 9 },
@@ -133,7 +164,7 @@ describe('EditSyncQueue', () => {
       onStatusChange: (s) => statuses.push(s),
     });
 
-    queue.push([{ from: 0, to: 0, insert: 'x' }]);
+    queue.push(ChangeSet.of({ from: 0, insert: 'x' }, 0));
     await queue.flush();
 
     expect(resyncs).toEqual([{ text: 'client text', seq: 1 }]);
@@ -147,7 +178,7 @@ describe('EditSyncQueue', () => {
     const { transport, sent } = makeTransport([]);
     const queue = new EditSyncQueue({ docId: 'd', transport, readText: () => '' });
     queue.dispose();
-    queue.push([{ from: 0, to: 0, insert: 'x' }]);
+    queue.push(ChangeSet.of({ from: 0, insert: 'x' }, 0));
     await vi.advanceTimersByTimeAsync(50);
     vi.useRealTimers();
     expect(sent).toHaveLength(0);

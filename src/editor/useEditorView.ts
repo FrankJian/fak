@@ -97,6 +97,8 @@ export interface EditorHandle {
    * 列超出该行长度时停在行尾。返回真正落在的行号，供状态提示用。
    */
   revealLineColumn: (line: number, column: number) => number;
+  /** 滚动到指定的 0 基行，不移动选区或键盘焦点。 */
+  scrollToLine: (line: number) => void;
   /** 总行数。跳转面板要拿它来提示范围 */
   getLineCount: () => number;
   /**
@@ -364,7 +366,7 @@ export function useEditorView({
       const userEvent = update.transactions
         .map((transaction) => transaction.annotation(Transaction.userEvent))
         .find((event): event is string => typeof event === "string");
-      queue.push(changes, inferOrigin({ userEvent, changes }));
+      queue.push(update.changes, inferOrigin({ userEvent, changes }));
     });
 
     const view = new EditorView({
@@ -416,11 +418,23 @@ export function useEditorView({
 
     // IME 组合期间不下发增量（SPEC P1 契约第 5 条）：
     // 组合中的中间态是「假文本」，发过去只会让 Rust 反复重算
-    const onCompositionStart = () => queue.setComposing(true);
-    const onCompositionEnd = () => queue.setComposing(false);
+    let compositionEndFrame: number | null = null;
+    const onCompositionStart = () => {
+      if (compositionEndFrame !== null) cancelAnimationFrame(compositionEndFrame);
+      compositionEndFrame = null;
+      queue.setComposing(true);
+    };
+    const onCompositionEnd = () => {
+      if (compositionEndFrame !== null) return;
+      // 组合结束事件可能早于最后一次 input 事务；下一帧再放行同步与保存。
+      compositionEndFrame = requestAnimationFrame(() => {
+        compositionEndFrame = null;
+        queue.setComposing(false);
+      });
+    };
     // 失焦会取消或提交当前组合；个别 Windows IME 此时不会把 compositionend
     // 冒泡到编辑器节点，必须解除队列的暂停状态。
-    const onBlur = () => queue.setComposing(false);
+    const onBlur = onCompositionEnd;
     view.dom.addEventListener("compositionstart", onCompositionStart);
     view.dom.addEventListener("compositionend", onCompositionEnd);
     view.dom.addEventListener("blur", onBlur);
@@ -469,6 +483,10 @@ export function useEditorView({
         });
         view.focus();
         return target;
+      },
+      scrollToLine: (line) => {
+        const target = view.state.doc.line(clampLine(line + 1, view.state.doc.lines)).from;
+        view.dispatch({ effects: EditorView.scrollIntoView(target, { y: "start" }) });
       },
       getLineCount: () => view.state.doc.lines,
       getViewportAnchor: () => ({
@@ -563,6 +581,7 @@ export function useEditorView({
     setEditFlush(flush);
 
     return () => {
+      if (compositionEndFrame !== null) cancelAnimationFrame(compositionEndFrame);
       viewportAnchorChangeRef.current?.(viewportAnchor());
       foldedLinesChangeRef.current?.(foldedLines(view.state));
       clearEditFlush(flush);

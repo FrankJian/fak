@@ -167,6 +167,7 @@ export function App() {
     useState<MarkdownPreviewMode>("hidden");
   const [editorRevision, setEditorRevision] = useState(0);
   const [previewTopLine, setPreviewTopLine] = useState(0);
+  const [previewSourceProgress, setPreviewSourceProgress] = useState(0);
   const [markdownEditorSplit, setMarkdownEditorSplit] = useState(50);
   const markdownSplitDragRef = useRef<{
     startX: number;
@@ -1208,6 +1209,7 @@ export function App() {
                     setFoldedLines(activeTab.meta.documentId, lines)
                   }
                   onTopLineChange={setPreviewTopLine}
+                  onScrollProgressChange={setPreviewSourceProgress}
                   handleRef={workspace.handleRef}
                   searchPositions={find.positions}
                   searchOverviewLength={find.overviewLength}
@@ -1244,11 +1246,16 @@ export function App() {
                 >
                   <MarkdownPreview
                     documentId={activeTab.meta.documentId}
+                    documentPath={activeTab.path}
                     revision={editorRevision}
                     autoRefresh={activeTab.meta.mode === "full"}
                     topLine={previewTopLine}
+                    sourceScrollProgress={previewSourceProgress}
+                    lineCount={activeTab.meta.lineCount}
                     syncScroll={previewSyncScroll}
                     blockRemoteImages={previewBlockRemoteImages}
+                    onOpenDocument={(path) => void workspace.openAtPath(path)}
+                    onPreviewTopLineChange={(line) => workspace.handleRef.current?.scrollToLine(line)}
                   />
                 </div>
               )}

@@ -32,10 +32,10 @@ function tab(locked: boolean): Tab {
   };
 }
 
-function renderTabBar(locked: boolean, onQuickClose = vi.fn()) {
+function renderTabBar(locked: boolean, onQuickClose = vi.fn(), missingOnDisk = false) {
   render(
     <TabBar
-      tabs={[tab(locked)]}
+      tabs={[{ ...tab(locked), missingOnDisk }]}
       activeId="doc-1"
       onActivate={vi.fn()}
       onClose={vi.fn()}
@@ -74,5 +74,13 @@ describe("locked tab quick close", () => {
       new MouseEvent("auxclick", { bubbles: true, button: 1 }),
     );
     expect(onQuickClose).toHaveBeenCalledWith("doc-1");
+  });
+});
+
+describe("deleted file tab", () => {
+  it("shows a visible deletion notice while keeping the tab open", () => {
+    renderTabBar(false, vi.fn(), true);
+    expect(screen.getByRole("tab")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("已删除");
   });
 });

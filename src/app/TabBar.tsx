@@ -167,6 +167,17 @@ export function TabBar({
                 {fileName || t("tab.untitled")}
               </span>
 
+              {tab.missingOnDisk && (
+                <span
+                  role="status"
+                  title={t("tab.deletedOnDisk")}
+                  className="flex shrink-0 items-center gap-[var(--space-1)] text-[var(--danger)]"
+                >
+                  <Icon name="warning" variant="status" />
+                  {t("tab.deletedOnDisk")}
+                </span>
+              )}
+
               {/* 圆点位置固定占位，避免脏与不脏时标签宽度跳动 */}
               <span
                 aria-hidden={!dirty}

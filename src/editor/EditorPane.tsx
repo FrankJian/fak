@@ -48,6 +48,7 @@ interface EditorPaneProps {
   onFoldedLinesChange?: (lines: number[]) => void;
   /** 视口首行（0 基），Markdown 预览的滚动同步跟的是它 */
   onTopLineChange?: (topLine: number) => void;
+  onScrollProgressChange?: (progress: number) => void;
   /** flush 闸门的出口：保存等以 Rust 为准的操作要先 await 它 */
   handleRef: RefObject<EditorHandle | null>;
   searchPositions?: readonly SearchMatch[];
@@ -72,6 +73,7 @@ export function EditorPane({
   onViewportAnchorChange,
   onFoldedLinesChange,
   onTopLineChange,
+  onScrollProgressChange,
   handleRef,
   searchPositions = [],
   searchOverviewLength = 0,
@@ -104,6 +106,10 @@ export function EditorPane({
     progress: 0,
     viewportFraction: 1,
   });
+
+  useEffect(() => {
+    onScrollProgressChange?.(minimapScroll.progress);
+  }, [minimapScroll.progress, onScrollProgressChange]);
 
   const containerRef = useEditorView({
     meta,

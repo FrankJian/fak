@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { discardBackup } from "../ipc/backup";
 import { pickPathToSave } from "../ipc/dialog";
 import {
+  openFile,
   readAllText,
   redo as redoDocument,
   saveDocument,
@@ -19,6 +20,7 @@ vi.mock("../ipc/documents", async (importOriginal) => {
   return {
     ...actual,
     readAllText: vi.fn(),
+    openFile: vi.fn(),
     saveDocument: vi.fn(),
     undo: vi.fn(),
     redo: vi.fn(),
@@ -57,6 +59,7 @@ describe("useWorkspace 标签正文", () => {
   beforeEach(() => {
     useDocumentStore.setState({ tabs: [], activeId: null });
     vi.mocked(readAllText).mockReset();
+    vi.mocked(openFile).mockReset();
     vi.mocked(readAllText).mockImplementation(async (documentId) =>
       documentId === "app-js" ? "console.log('app');" : '{"pages":[]}',
     );
@@ -129,6 +132,39 @@ describe("useWorkspace 标签正文", () => {
     expect(saveDocument).toHaveBeenNthCalledWith(2, "app-json", {
       path: undefined,
     });
+  });
+
+  it("新建文档保存后，从文件树打开同一路径时复用原标签", async () => {
+    const document = meta("new-file", "");
+    useDocumentStore.getState().addTab(document);
+    vi.mocked(pickPathToSave).mockResolvedValue("C:\\work\\notes.md");
+    vi.mocked(saveDocument).mockResolvedValue({ ...document, fileName: "notes.md" });
+    const { result } = renderHook(() => useWorkspace());
+
+    await act(async () => { await result.current.save(); });
+    await act(async () => { await result.current.openAtPath("c:/work/notes.md"); });
+
+    expect(openFile).not.toHaveBeenCalled();
+    expect(useDocumentStore.getState().tabs).toHaveLength(1);
+    expect(useDocumentStore.getState().activeId).toBe("new-file");
+  });
+
+  it("保存路径含别名时，后端返回已有文档 ID 仍复用原标签", async () => {
+    const document = meta("new-file", "");
+    useDocumentStore.getState().addTab(document);
+    vi.mocked(pickPathToSave).mockResolvedValue("/alias/work/notes.md");
+    vi.mocked(saveDocument).mockResolvedValue({ ...document, fileName: "notes.md" });
+    vi.mocked(openFile).mockResolvedValue({ ...document, fileName: "notes.md" });
+    const { result } = renderHook(() => useWorkspace());
+
+    await act(async () => { await result.current.save(); });
+    vi.mocked(readAllText).mockClear();
+    await act(async () => { await result.current.openAtPath("/real/work/notes.md"); });
+
+    expect(openFile).toHaveBeenCalledWith("/real/work/notes.md");
+    expect(readAllText).not.toHaveBeenCalled();
+    expect(useDocumentStore.getState().tabs).toHaveLength(1);
+    expect(useDocumentStore.getState().activeId).toBe("new-file");
   });
 
   it("撤销前先同步编辑器，避免 Markdown 工具栏编辑仍在合并窗口中", async () => {

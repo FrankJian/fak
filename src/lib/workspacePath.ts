@@ -10,6 +10,24 @@ function normalize(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
+function identity(path: string): string {
+  const normalized = normalize(path);
+  // Windows 驱动器路径按不区分大小写比较；Unix 路径必须保留大小写语义。
+  return /^[A-Za-z]:\//.test(normalized) || normalized.startsWith("//")
+    ? normalized.toLowerCase()
+    : normalized;
+}
+
+export function sameFilePath(left: string, right: string): boolean {
+  return identity(left) === identity(right);
+}
+
+export function pathIsWithin(path: string, parent: string): boolean {
+  const target = identity(path);
+  const base = identity(parent);
+  return target === base || target.startsWith(`${base}/`);
+}
+
 /**
  * 把绝对路径换算成相对 `root` 的路径。
  *

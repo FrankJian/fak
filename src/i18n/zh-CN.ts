@@ -123,6 +123,7 @@ export const zhCN = {
   "tab.contextMenu": "标签页菜单",
   "tab.switchPrevious": "切换到上一个标签页",
   "tab.unsaved": "未保存",
+  "tab.deletedOnDisk": "已删除",
   "tab.untitled": "未命名",
   "tab.closeOthers": "关闭其他标签页",
   "tab.closeToRight": "关闭右侧标签页",

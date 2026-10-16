@@ -8,7 +8,7 @@ use crate::file_io::{plan_open, save_atomic, ConflictPolicy, FileFingerprint};
 use crate::state::{AppState, Document, DocumentMode, LineEnding};
 use crate::stream::StreamDocuments;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use tauri::ipc::Channel;
 
@@ -54,6 +54,12 @@ pub async fn open_file(
         return Err(AppError::BinaryContent {
             path_hint: crate::error::path_hint(&plan.path),
         });
+    }
+
+    // 保存对话框可返回带符号链接的路径，而文件树始终返回规范路径。
+    // 已打开的文件必须复用同一份内存文档，否则会有两个可独立修改的标签。
+    if let Some(existing) = opened_document_at_path(&state, &plan.path)? {
+        return Ok(existing);
     }
 
     let sample_path = plan.path.clone();
@@ -116,6 +122,16 @@ pub async fn open_file(
     let meta = DocumentMeta::of(&document);
     state.documents.insert(document_id, RwLock::new(document));
     Ok(meta)
+}
+
+fn opened_document_at_path(state: &AppState, path: &Path) -> AppResult<Option<DocumentMeta>> {
+    for entry in &state.documents {
+        let document = entry.read().map_err(|_| AppError::Io { os_code: None })?;
+        if document.path.as_deref() == Some(path) {
+            return Ok(Some(DocumentMeta::of(&document)));
+        }
+    }
+    Ok(None)
 }
 
 fn read_detection_sample(path: &std::path::Path) -> AppResult<Vec<u8>> {
@@ -412,19 +428,28 @@ pub async fn save_document(
     };
 
     let target = path.clone();
-    let (outcome, read_only) = tauri::async_runtime::spawn_blocking(move || {
+    let (outcome, read_only, canonical_path) = tauri::async_runtime::spawn_blocking(move || {
         let outcome = save_atomic(&target, &bytes, expected, policy)?;
         let read_only = std::fs::metadata(&target)
             .map_err(|error| AppError::from_io(&error, &target))?
             .permissions()
             .readonly();
-        Ok::<_, AppError>((outcome, read_only))
+        let canonical_path = match std::fs::canonicalize(&target) {
+            Ok(canonical) => canonical,
+            Err(_) => target,
+        };
+        Ok::<_, AppError>((outcome, read_only, canonical_path))
     })
     .await
     .map_err(|_| AppError::Io { os_code: None })??;
 
     with_document(&state, &args.document_id, |document| {
-        Ok(finish_save(document, path, outcome.fingerprint, read_only))
+        Ok(finish_save(
+            document,
+            canonical_path,
+            outcome.fingerprint,
+            read_only,
+        ))
     })
 }
 
@@ -655,5 +680,29 @@ mod tests {
         assert_eq!(meta.file_name, "copy.txt");
         assert!(!meta.read_only);
         assert!(!meta.dirty);
+    }
+
+    #[test]
+    fn saved_document_is_reused_through_its_canonical_path() {
+        let dir = tempfile::tempdir().expect("临时目录");
+        let nested = dir.path().join("nested");
+        std::fs::create_dir(&nested).expect("创建目录");
+        let target = dir.path().join("notes.md");
+        std::fs::write(&target, "text").expect("写测试文件");
+        let canonical = target.canonicalize().expect("规范化测试文件");
+        let alias = nested.join("..").join("notes.md");
+        let state = AppState::default();
+        let mut document = Document::new("d1".into(), None, "text");
+        let resolved = alias.canonicalize().expect("规范化保存路径");
+        finish_save(&mut document, resolved, FileFingerprint::default(), false);
+        state.documents.insert("d1".into(), RwLock::new(document));
+
+        let existing = opened_document_at_path(&state, &canonical)
+            .expect("查找成功")
+            .expect("已打开文档");
+        assert_eq!(existing.document_id, "d1");
+        assert!(opened_document_at_path(&state, &nested.join("other.md"))
+            .expect("查找成功")
+            .is_none());
     }
 }

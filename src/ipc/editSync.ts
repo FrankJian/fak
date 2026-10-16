@@ -7,6 +7,7 @@
  * 4. 任何以 Rust 为准的操作前必须 flush 并等待确认
  * 5. IME 组合期间不下发
  */
+import type { ChangeSet } from '@codemirror/state';
 
 export interface Change {
   from: number;
@@ -60,7 +61,7 @@ export interface EditSyncOptions {
 export const COALESCE_WINDOW_MS = 16;
 
 export class EditSyncQueue {
-  private pending: Change[] = [];
+  private pending: ChangeSet | null = null;
   private pendingOrigin: BatchOrigin | null = null;
   private seq = 0;
   private version = 0;
@@ -82,9 +83,10 @@ export class EditSyncQueue {
   }
 
   /** 本地已应用的编辑推入队列；调用方不等待。 */
-  push(changes: Change[], origin: BatchOrigin = 'other'): void {
-    if (this.disposed || changes.length === 0) return;
-    this.pending.push(...changes);
+  push(changes: ChangeSet, origin: BatchOrigin = 'other'): void {
+    if (this.disposed || changes.empty) return;
+    // 后续事务的坐标基于前一事务的新正文；Rust 要求整批都基于同一份旧正文。
+    this.pending = this.pending ? this.pending.compose(changes) : changes;
     // 一批里混了不同类型时退到 other：宁可让撤销多分一步，
     // 也不能把一次粘贴混进逐字输入里合并掉
     this.pendingOrigin =
@@ -122,7 +124,8 @@ export class EditSyncQueue {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    while (this.pending.length > 0) {
+    await this.waitForCompositionEnd();
+    while (this.pending !== null) {
       // `send()` 在组合期间会正确地拒绝发送。之前这里会立刻返回后进入下一轮
       // while，导致按 Enter 直接提交拼音时忙等并卡死 WebView。
       await this.waitForCompositionEnd();
@@ -138,7 +141,7 @@ export class EditSyncQueue {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    this.pending = [];
+    this.pending = null;
     for (const resolve of this.compositionWaiters.splice(0)) resolve();
   }
 
@@ -151,8 +154,19 @@ export class EditSyncQueue {
     if (this.inFlight) {
       await this.inFlight;
     }
-    if (this.pending.length === 0 || this.composing || this.disposed) {
-      if (this.pending.length === 0) this.setStatus('idle');
+    if (this.pending === null || this.composing || this.disposed) {
+      if (this.pending === null) this.setStatus('idle');
+      return;
+    }
+
+    const changes: Change[] = [];
+    this.pending.iterChanges((from, to, _fromNew, _toNew, insert) => {
+      changes.push({ from, to, insert: insert.toString() });
+    });
+    if (changes.length === 0) {
+      this.pending = null;
+      this.pendingOrigin = null;
+      this.setStatus('idle');
       return;
     }
 
@@ -160,24 +174,24 @@ export class EditSyncQueue {
       docId: this.options.docId,
       baseVersion: this.version,
       seq: ++this.seq,
-      changes: this.pending,
+      changes,
       origin: this.pendingOrigin ?? 'other',
     };
-    this.pending = [];
+    this.pending = null;
     this.pendingOrigin = null;
 
     this.inFlight = (async () => {
       const result = await this.options.transport.apply(batch);
       if (result.ok) {
         this.version = result.serverVersion;
-        if (this.pending.length === 0) this.setStatus('idle');
+        if (this.pending === null) this.setStatus('idle');
         return;
       }
       // 版本失配 / 断档：唯一正确的出路是全量重放（SPEC P1 契约第 3 条）
       this.setStatus('resyncing');
       const text = this.options.readText();
       this.version = await this.options.transport.resync(this.options.docId, text, batch.seq);
-      this.pending = [];
+      this.pending = null;
       this.setStatus('idle');
     })();
 
