@@ -12,6 +12,7 @@ import {
   type WorkspaceEntry,
 } from "../ipc/workspace";
 import { logger } from "../lib/logger";
+import { deletedTabIds } from "../lib/workspacePath";
 import { useDocumentStore } from "../store/documentStore";
 
 export interface FileTreeNode extends WorkspaceEntry {
@@ -99,10 +100,9 @@ function findNode(node: FileTreeNode, path: string): FileTreeNode | null {
 /** 文件树的数据与异步装载控制；渲染层只接收稳定树快照与用户动作。 */
 export function useFileTree(
   onError: (error: unknown) => void,
+  onDeleted: (documentIds: readonly string[]) => Promise<void>,
 ): FileTreeController {
   const renamePaths = useDocumentStore((state) => state.renamePaths);
-  const markDeletedPaths = useDocumentStore((state) => state.markDeletedPaths);
-  const markDeletedIds = useDocumentStore((state) => state.markDeletedIds);
   const [root, setRoot] = useState<FileTreeNode | null>(null);
   const [loadingPath, setLoadingPath] = useState<string | null>(null);
   const rootRef = useRef(root);
@@ -337,14 +337,17 @@ export function useFileTree(
       if (!root) return "unavailable";
       const { outcome, documentIds } = await moveWorkspaceEntryToTrash(root, path);
       if (outcome === "moved") {
-        markDeletedPaths(path);
-        markDeletedIds(documentIds);
+        const tabs = useDocumentStore.getState().tabs.map((tab) => ({
+          documentId: tab.meta.documentId,
+          path: tab.path,
+        }));
+        await onDeleted(deletedTabIds(tabs, path, documentIds));
         const parent = path.replace(/[\\/][^\\/]+$/, "");
         await reloadDirectory(parent);
       }
       return outcome;
     },
-    [markDeletedIds, markDeletedPaths, reloadDirectory, rootPath],
+    [onDeleted, reloadDirectory, rootPath],
   );
 
   const permanentlyDelete = useCallback(
@@ -352,12 +355,15 @@ export function useFileTree(
       const root = rootPath();
       if (!root) return;
       const { documentIds } = await permanentlyDeleteWorkspaceEntry(root, path);
-      markDeletedPaths(path);
-      markDeletedIds(documentIds);
+      const tabs = useDocumentStore.getState().tabs.map((tab) => ({
+        documentId: tab.meta.documentId,
+        path: tab.path,
+      }));
+      await onDeleted(deletedTabIds(tabs, path, documentIds));
       const parent = path.replace(/[\\/][^\\/]+$/, "");
       await reloadDirectory(parent);
     },
-    [markDeletedIds, markDeletedPaths, reloadDirectory, rootPath],
+    [onDeleted, reloadDirectory, rootPath],
   );
 
   return {

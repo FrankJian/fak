@@ -38,6 +38,17 @@ describe("workspace action shortcuts", () => {
     expect(getDefaultShortcut("edit.undo")).toBe("Mod+Z");
   });
 
+  it("binds the file tree toggle to the cross-platform explorer shortcut", () => {
+    registerWorkspaceActions(
+      {} as RegisterArgs[0],
+      {} as RegisterArgs[1],
+      {} as RegisterArgs[2],
+      {} as RegisterArgs[3],
+    );
+
+    expect(getDefaultShortcut("view.fileTree")).toBe("Mod+Shift+E");
+  });
+
   it("enables format actions from the current file context after opening a JSON file", () => {
     registerWorkspaceActions(
       {} as RegisterArgs[0],

@@ -142,11 +142,17 @@ export function App() {
   );
   const diff = useDiffStore();
   const workspace = useWorkspace();
+  const closeDeletedDocuments = useCallback(async (documentIds: readonly string[]) => {
+    for (const documentId of documentIds) {
+      diff.forgetDocument(documentId);
+      await workspace.close(documentId);
+    }
+  }, [diff, workspace]);
   const activatePreviousDocument = useCallback(() => {
     const target = mostRecentlyUsed(tabs, activeId);
     if (target) void workspace.activate(target);
   }, [activeId, tabs, workspace]);
-  const fileTree = useFileTree(workspace.report);
+  const fileTree = useFileTree(workspace.report, closeDeletedDocuments);
   const backup = useBackup({
     activeDocumentId: activeId,
     onRecovered: workspace.adopt,

@@ -81,6 +81,7 @@ export const enUS: Record<MessageKey, string> = {
   "fileTree.delete": "Delete",
   "fileTree.deleteTitle": "Move to Recycle Bin",
   "fileTree.deleteBody": "Move “{name}” to the system recycle bin?",
+  "fileTree.deleteOpenTabsWarning": "Any open files inside will have their tabs closed, and unsaved changes will be lost.",
   "fileTree.permanentDeleteTitle": "Recycle bin unavailable",
   "fileTree.permanentDeleteBody":
     "The system recycle bin is unavailable. Permanently delete “{name}”? This cannot be undone.",
@@ -166,6 +167,7 @@ export const enUS: Record<MessageKey, string> = {
   "syntax.json": "JSON",
   "syntax.markdown": "Markdown",
   "syntax.bash": "Shell Script",
+  "syntax.html": "HTML",
   "stream.promote": "Load for editing",
   "filter.title": "Filter view",
   "filter.togglePanel": "Toggle filter view",

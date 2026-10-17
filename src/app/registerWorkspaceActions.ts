@@ -681,6 +681,7 @@ export function registerWorkspaceActions(
     titleKey: "toolbar.toggleFileTree",
     categoryKey: "category.view",
     icon: "fileTree",
+    shortcut: "Mod+Shift+E",
     run: () => panels.toggleFileTree(),
   });
 

@@ -10,7 +10,8 @@ export type SyntaxKey =
   | 'python'
   | 'json'
   | 'markdown'
-  | 'bash';
+  | 'bash'
+  | 'html';
 
 /** 工具栏里可手动指定的类型；纯文本是显式覆盖，而不是“没有选择”。 */
 export type SyntaxSelection = SyntaxKey | 'plainText';
@@ -25,6 +26,7 @@ const SYNTAX_FILE_NAMES: Record<SyntaxSelection, string> = {
   json: 'untitled.json',
   markdown: 'untitled.md',
   bash: 'untitled.sh',
+  html: 'untitled.html',
 };
 
 export function syntaxKeyFromFileName(fileName: string): SyntaxKey | null {
@@ -55,6 +57,9 @@ export function syntaxKeyFromFileName(fileName: string): SyntaxKey | null {
     case 'sh':
     case 'bash':
       return 'bash';
+    case 'html':
+    case 'htm':
+      return 'html';
     default:
       return null;
   }

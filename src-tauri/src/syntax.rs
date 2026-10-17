@@ -57,6 +57,7 @@ pub enum SyntaxKey {
     Toml,
     Ini,
     Bash,
+    Html,
 }
 
 impl SyntaxKey {
@@ -83,6 +84,7 @@ impl SyntaxKey {
         Self::Toml,
         Self::Ini,
         Self::Bash,
+        Self::Html,
     ];
 
     pub fn from_file_name(file_name: &str) -> Option<Self> {
@@ -115,6 +117,7 @@ impl SyntaxKey {
             "toml" => Some(Self::Toml),
             "ini" | "cfg" | "conf" | "properties" => Some(Self::Ini),
             "sh" | "bash" => Some(Self::Bash),
+            "html" | "htm" => Some(Self::Html),
             _ => None,
         }
     }
@@ -145,6 +148,7 @@ impl SyntaxKey {
             "toml" => Some(Self::Toml),
             "ini" | "cfg" | "conf" | "properties" => Some(Self::Ini),
             "sh" | "shell" | "bash" => Some(Self::Bash),
+            "html" | "htm" => Some(Self::Html),
             _ => None,
         }
     }
@@ -174,6 +178,7 @@ impl SyntaxKey {
             Self::Toml => tree_sitter_toml_ng::LANGUAGE.into(),
             Self::Ini => tree_sitter_ini::LANGUAGE.into(),
             Self::Bash => tree_sitter_bash::LANGUAGE.into(),
+            Self::Html => tree_sitter_html::LANGUAGE.into(),
         }
     }
 
@@ -205,6 +210,8 @@ impl SyntaxKey {
             Self::Toml => tree_sitter_toml_ng::HIGHLIGHTS_QUERY.to_string(),
             Self::Ini => tree_sitter_ini::HIGHLIGHTS_QUERY.to_string(),
             Self::Bash => tree_sitter_bash::HIGHLIGHT_QUERY.to_string(),
+            // crate 的 @tag / @attribute 不在 SPEC §6.3.5 的色相集合中。
+            Self::Html => include_str!("queries/highlights-html.scm").to_string(),
         }
     }
 
@@ -234,6 +241,7 @@ impl SyntaxKey {
             Self::Toml => include_str!("queries/outline-toml.scm"),
             Self::Ini => include_str!("queries/outline-ini.scm"),
             Self::Bash => include_str!("queries/outline-bash.scm"),
+            Self::Html => include_str!("queries/outline-html.scm"),
         })
     }
 }
@@ -684,6 +692,11 @@ mod tests {
         assert_eq!(SyntaxKey::from_file_name("setup.cfg"), Some(SyntaxKey::Ini));
         assert_eq!(SyntaxKey::from_file_name("build.sh"), Some(SyntaxKey::Bash));
         assert_eq!(
+            SyntaxKey::from_file_name("index.html"),
+            Some(SyntaxKey::Html)
+        );
+        assert_eq!(SyntaxKey::from_file_name("PAGE.HTM"), Some(SyntaxKey::Html));
+        assert_eq!(
             SyntaxKey::from_file_name("deploy.bash"),
             Some(SyntaxKey::Bash)
         );
@@ -726,6 +739,19 @@ mod tests {
             .spans;
         assert!(spans.iter().any(|span| span.capture == "comment"));
         assert!(spans.iter().any(|span| span.capture == "keyword"));
+    }
+
+    #[test]
+    fn html_produces_syntax_highlights() {
+        let source =
+            "<!doctype html><html><body><div class=\"card\">Hello</div><!-- note --></body></html>";
+        let spans = SyntaxCache::default()
+            .spans("html", SyntaxKey::Html, source, 1, 0, source.len())
+            .expect("HTML 高亮")
+            .spans;
+        assert!(spans.iter().any(|span| span.capture == "type"));
+        assert!(spans.iter().any(|span| span.capture == "string"));
+        assert!(spans.iter().any(|span| span.capture == "comment"));
     }
 
     // 编辑器内核只接受不相交区间，这条是渲染正确性的前提

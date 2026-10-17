@@ -14,7 +14,7 @@ export type HighlightCapture =
   | 'comment'
   | 'type';
 
-export type SyntaxKey = 'typeScript' | 'tsx' | 'javaScript';
+export type SyntaxKey = 'typeScript' | 'tsx' | 'javaScript' | 'html';
 
 export interface HighlightSpan {
   start: number;

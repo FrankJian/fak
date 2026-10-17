@@ -8,6 +8,8 @@ describe('syntaxKeyFromFileName', () => {
     expect(syntaxKeyFromFileName('README.md')).toBe('markdown');
     expect(syntaxKeyFromFileName('build.sh')).toBe('bash');
     expect(syntaxKeyFromFileName('deploy.bash')).toBe('bash');
+    expect(syntaxKeyFromFileName('index.html')).toBe('html');
+    expect(syntaxKeyFromFileName('PAGE.HTM')).toBe('html');
   });
 
   it('returns null for unknown extensions', () => {
@@ -16,6 +18,7 @@ describe('syntaxKeyFromFileName', () => {
 
   it('maps manual selections back to virtual file names used by text tools', () => {
     expect(syntaxFileName('markdown')).toBe('untitled.md');
+    expect(syntaxFileName('html')).toBe('untitled.html');
     expect(syntaxFileName('json')).toBe('untitled.json');
     expect(syntaxFileName('plainText')).toBe('untitled.txt');
   });

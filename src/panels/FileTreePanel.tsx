@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../design/Icon";
 import { IconButton } from "../design/components/IconButton";
 import { useTranslation } from "../i18n/useTranslation";
@@ -69,7 +69,7 @@ export function FileTreePanel({
   const [scrollTop, setScrollTop] = useState(0);
   const [viewport, setViewport] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
   const widthRef = useRef(width);
   const [menu, setMenu] = useState<{
     node: FileTreeNode;
@@ -105,31 +105,21 @@ export function FileTreePanel({
     setWidth(persistedWidth);
   }, [persistedWidth]);
 
-  useEffect(() => {
-    const onMove = (event: PointerEvent) => {
-      const drag = dragRef.current;
-      if (!drag) return;
-      const next = Math.min(
-        MAX_WIDTH,
-        Math.max(MIN_WIDTH, drag.startWidth + event.clientX - drag.startX),
-      );
-      widthRef.current = next;
-      setWidth(next);
-    };
-    const onUp = () => {
-      if (dragRef.current !== null)
-        patchConfig({ fileTreeWidth: widthRef.current });
-      dragRef.current = null;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-  }, [patchConfig]);
+  const resizeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, drag.startWidth + event.clientX - drag.startX));
+    widthRef.current = next;
+    setWidth(next);
+  };
+
+  const resizeEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    patchConfig({ fileTreeWidth: widthRef.current });
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+  };
 
   const commitRename = async (node: FileTreeNode) => {
     if (working) return;
@@ -186,7 +176,7 @@ export function FileTreePanel({
     <>
       <aside
         aria-label={t("fileTree.panel")}
-        className="flex min-h-0 shrink-0 border-r border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+        className="flex min-h-0 shrink-0 bg-[var(--bg-surface)]"
         style={{ width: `${width}px` }}
       >
         <div className="flex min-w-0 flex-1 flex-col">
@@ -265,11 +255,32 @@ export function FileTreePanel({
           role="separator"
           aria-label={t("fileTree.resize")}
           aria-orientation="vertical"
-          className="w-[3px] shrink-0 cursor-col-resize hover:bg-[var(--accent-border)]"
+          aria-valuemin={MIN_WIDTH}
+          aria-valuemax={MAX_WIDTH}
+          aria-valuenow={width}
+          tabIndex={0}
+          className="relative w-[8px] shrink-0 cursor-col-resize touch-none select-none hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent-border)]"
           onPointerDown={(event) => {
-            dragRef.current = { startX: event.clientX, startWidth: width };
+            if (event.button !== 0) return;
+            dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: widthRef.current };
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+            event.preventDefault();
           }}
-        />
+          onPointerMove={resizeMove}
+          onPointerUp={resizeEnd}
+          onPointerCancel={resizeEnd}
+          onLostPointerCapture={resizeEnd}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, widthRef.current + (event.key === "ArrowRight" ? 16 : -16)));
+            widthRef.current = next;
+            setWidth(next);
+            patchConfig({ fileTreeWidth: next });
+          }}
+        >
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-[var(--border-subtle)]" />
+        </div>
       </aside>
       {menu && (
         <FileTreeContextMenu

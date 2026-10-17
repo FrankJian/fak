@@ -23,6 +23,7 @@ const ACTION_IDS: &[&str] = &[
     "edit.undo",
     "edit.redo",
     "view.quickAccessBar",
+    "view.fileTree",
     "view.markdownPreview",
     "view.commandPalette",
     "help.checkForUpdates",
@@ -45,6 +46,7 @@ struct Labels {
     undo: &'static str,
     redo: &'static str,
     quick_access_bar: &'static str,
+    file_tree: &'static str,
     markdown_preview: &'static str,
     command_palette: &'static str,
     check_updates: &'static str,
@@ -77,6 +79,7 @@ impl Labels {
                 undo: "撤销",
                 redo: "重做",
                 quick_access_bar: "显示快捷栏",
+                file_tree: "显示/隐藏文件树",
                 markdown_preview: "Markdown 预览",
                 command_palette: "命令面板…",
                 check_updates: "检查更新…",
@@ -105,6 +108,7 @@ impl Labels {
                 undo: "Undo",
                 redo: "Redo",
                 quick_access_bar: "Show Quick Access Bar",
+                file_tree: "Show/Hide File Tree",
                 markdown_preview: "Markdown Preview",
                 command_palette: "Command Palette…",
                 check_updates: "Check for Updates…",
@@ -165,6 +169,12 @@ pub fn install_on_handle(app: &tauri::AppHandle, config: &Config) -> tauri::Resu
         CheckMenuItemBuilder::with_id("view.quickAccessBar", labels.quick_access_bar)
             .checked(config.quick_access_bar_visible)
             .build(app)?;
+    let file_tree = item(
+        app,
+        "view.fileTree",
+        labels.file_tree,
+        Some("CmdOrCtrl+Shift+E"),
+    )?;
     let markdown_preview = item(app, "view.markdownPreview", labels.markdown_preview, None)?;
     let command_palette = item(
         app,
@@ -199,6 +209,7 @@ pub fn install_on_handle(app: &tauri::AppHandle, config: &Config) -> tauri::Resu
         .build()?;
     let view_menu = SubmenuBuilder::new(app, labels.view)
         .item(&quick_access)
+        .item(&file_tree)
         .separator()
         .item(&markdown_preview)
         .item(&command_palette)
@@ -271,5 +282,6 @@ mod tests {
     fn every_forwarded_id_uses_the_frontend_action_namespace() {
         assert!(ACTION_IDS.iter().all(|id| id.contains('.')));
         assert!(ACTION_IDS.contains(&"view.quickAccessBar"));
+        assert!(ACTION_IDS.contains(&"view.fileTree"));
     }
 }

@@ -83,3 +83,10 @@ describe("Toolbar file type picker", () => {
     expect(onFileTypeChange).toHaveBeenCalledWith("markdown");
   });
 });
+
+describe("Toolbar file tree toggle", () => {
+  it("does not show a file tree toggle in quick access", () => {
+    renderToolbar();
+    expect(screen.queryByRole("button", { name: "文件树" })).not.toBeInTheDocument();
+  });
+});

@@ -28,6 +28,19 @@ export function pathIsWithin(path: string, parent: string): boolean {
   return target === base || target.startsWith(`${base}/`);
 }
 
+/** 删除目录时包含所有已打开的子文件；后端 ID 兜住会话恢复及路径别名。 */
+export function deletedTabIds(
+  tabs: readonly { documentId: string; path: string | null }[],
+  deletedPath: string,
+  backendIds: readonly string[],
+): string[] {
+  const ids = new Set(backendIds);
+  return tabs
+    .filter((tab) => ids.has(tab.documentId) ||
+      (tab.path !== null && pathIsWithin(tab.path, deletedPath)))
+    .map((tab) => tab.documentId);
+}
+
 /**
  * 把绝对路径换算成相对 `root` 的路径。
  *

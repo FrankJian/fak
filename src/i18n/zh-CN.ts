@@ -78,6 +78,7 @@ export const zhCN = {
   "fileTree.delete": "删除",
   "fileTree.deleteTitle": "移入回收站",
   "fileTree.deleteBody": "确定将「{name}」移入系统回收站吗？",
+  "fileTree.deleteOpenTabsWarning": "若其中有已打开的文件，其标签会关闭，未保存的修改将丢失。",
   "fileTree.permanentDeleteTitle": "回收站不可用",
   "fileTree.permanentDeleteBody":
     "无法使用系统回收站。确定永久删除「{name}」吗？此操作无法撤销。",
@@ -160,6 +161,7 @@ export const zhCN = {
   "syntax.json": "JSON",
   "syntax.markdown": "Markdown",
   "syntax.bash": "Shell 脚本",
+  "syntax.html": "HTML",
   "stream.promote": "载入为可编辑",
   "filter.title": "过滤视图",
   "filter.togglePanel": "切换过滤视图",

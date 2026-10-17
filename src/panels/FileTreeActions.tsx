@@ -221,6 +221,9 @@ export function FileTreeDeleteDialog({
           name: node?.name ?? "",
         })}
       </p>
+      <p className="mb-0 mt-[var(--space-2)] text-[var(--danger)]" style={{ fontSize: "var(--font-size-ui)" }}>
+        {t("fileTree.deleteOpenTabsWarning")}
+      </p>
     </Modal>
   );
 }

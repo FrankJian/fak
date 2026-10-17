@@ -1,6 +1,6 @@
 [package]
 name = "fak"
-version = "0.1.8"
+version = "0.1.9"
 description = "Fak text and code editor"
 authors = ["Fak contributors"]
 edition = "2021"
@@ -76,6 +76,7 @@ toml_edit = "0.25.13"
 reqwest = { version = "0.13.4", features = ["socks"] }
 dirs = "6.0.0"
 tree-sitter-bash = "0.25.1"
+tree-sitter-html = "0.23.2"
 
 [profile.release]
 lto = true

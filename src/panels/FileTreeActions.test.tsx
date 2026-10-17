@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { FileTreeContextMenu } from "./FileTreeActions";
+import { FileTreeContextMenu, FileTreeDeleteDialog } from "./FileTreeActions";
 
 describe("FileTreeContextMenu", () => {
   it("uses the shared menu spacing and supports keyboard navigation", async () => {
@@ -29,5 +29,19 @@ describe("FileTreeContextMenu", () => {
     await waitFor(() => expect(items[0]).toHaveFocus());
     fireEvent.keyDown(items[0], { key: "ArrowDown" });
     expect(items[1]).toHaveFocus();
+  });
+});
+
+describe("FileTreeDeleteDialog", () => {
+  it("warns that deleting an open file discards unsaved edits", () => {
+    render(
+      <FileTreeDeleteDialog
+        node={{ path: "/work/notes.md", name: "notes.md", kind: "file" }}
+        permanent={false}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/未保存的修改将丢失/)).toBeInTheDocument();
   });
 });
