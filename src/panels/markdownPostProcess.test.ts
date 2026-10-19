@@ -8,6 +8,7 @@ const mermaidMock = vi.hoisted(() => ({
 vi.mock("mermaid", () => ({ default: mermaidMock }));
 
 import {
+  decorateMermaidFigures,
   mermaidLanguage,
   normalizeMermaidSource,
   renderDiagrams,
@@ -42,11 +43,30 @@ describe("Markdown Mermaid blocks", () => {
 
     await renderDiagrams(container);
 
+    expect(mermaidMock.initialize).toHaveBeenCalledWith({
+      startOnLoad: false,
+      securityLevel: "strict",
+      htmlLabels: false,
+    });
+
     expect(mermaidMock.render).toHaveBeenCalledWith(
       expect.stringMatching(/^fak-mermaid-/),
       "flowchart TD\nA-->B",
     );
     expect(container.querySelector(".markdown-mermaid svg")).not.toBeNull();
     expect(container.querySelector("pre")).toBeNull();
+  });
+
+  it("adds accessible export controls once for each rendered diagram", () => {
+    const container = document.createElement("div");
+    container.innerHTML =
+      '<div class="markdown-mermaid"><svg></svg></div><div class="markdown-mermaid"><svg></svg></div>';
+    const labels = { png: "保存为 PNG", svg: "保存为 SVG" };
+
+    expect(decorateMermaidFigures(container, labels)).toBe(2);
+    expect(decorateMermaidFigures(container, labels)).toBe(2);
+    expect(container.querySelectorAll("button[data-mermaid-export]")).toHaveLength(4);
+    expect(container.querySelector('button[data-mermaid-export="png"]')?.getAttribute("aria-label"))
+      .toBe("保存为 PNG 1");
   });
 });

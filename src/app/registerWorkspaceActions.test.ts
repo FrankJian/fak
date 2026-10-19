@@ -68,4 +68,21 @@ describe("workspace action shortcuts", () => {
       format && isEnabled(format, { ...context, canFormatDocument: false }),
     ).toBe(false);
   });
+
+  it("exposes Mermaid image exports only while a rendered diagram is available", () => {
+    let available = false;
+    registerWorkspaceActions(
+      {} as RegisterArgs[0],
+      {} as RegisterArgs[1],
+      { hasMermaidDiagram: () => available } as RegisterArgs[2],
+      {} as RegisterArgs[3],
+    );
+    const png = getAction("markdown.exportPng");
+    const svg = getAction("markdown.exportSvg");
+    expect(png && isEnabled(png, context)).toBe(false);
+    expect(svg && isEnabled(svg, context)).toBe(false);
+    available = true;
+    expect(png && isEnabled(png, context)).toBe(true);
+    expect(svg && isEnabled(svg, context)).toBe(true);
+  });
 });

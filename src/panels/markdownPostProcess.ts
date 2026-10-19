@@ -126,7 +126,9 @@ export async function renderDiagrams(container: HTMLElement): Promise<void> {
   if (blocks.length === 0) return;
 
   const mermaid = (await import("mermaid")).default;
-  mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
+  // SVG 文本标签可被桌面 WebView 的 Canvas 稳定栅格化；HTML foreignObject
+  // 标签在部分平台导出 PNG 时会丢字或触发安全限制。
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", htmlLabels: false });
 
   for (const { block, language } of blocks) {
     const source = normalizeMermaidSource(block.textContent ?? "", language);
@@ -144,4 +146,34 @@ export async function renderDiagrams(container: HTMLElement): Promise<void> {
       logger.warn("mermaid render failed", error);
     }
   }
+}
+
+export function decorateMermaidFigures(
+  container: HTMLElement,
+  labels: { png: string; svg: string },
+): number {
+  const figures = container.querySelectorAll<HTMLElement>(".markdown-mermaid");
+  figures.forEach((figure, index) => {
+    let actions = figure.querySelector<HTMLElement>(".markdown-mermaid-actions");
+    if (!actions) {
+      actions = document.createElement("div");
+      actions.className = "markdown-mermaid-actions";
+      for (const format of ["png", "svg"] as const) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.mermaidExport = format;
+        button.textContent = format.toUpperCase();
+        actions.append(button);
+      }
+      figure.prepend(actions);
+    }
+    for (const format of ["png", "svg"] as const) {
+      const button = actions.querySelector<HTMLButtonElement>(`button[data-mermaid-export="${format}"]`);
+      if (!button) continue;
+      const label = `${labels[format]} ${index + 1}`;
+      button.setAttribute("aria-label", label);
+      button.title = label;
+    }
+  });
+  return figures.length;
 }

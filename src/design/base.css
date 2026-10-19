@@ -312,6 +312,36 @@ select:disabled,
   margin: 0 auto;
 }
 
+.markdown-preview-content .markdown-mermaid-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+.markdown-preview-content .markdown-mermaid-actions button {
+  min-width: var(--h-icon-button);
+  min-height: var(--h-icon-button);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+
+.markdown-preview-content .markdown-mermaid-actions button:hover,
+.markdown-preview-content .markdown-mermaid-actions button:focus-visible {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.markdown-preview-content .markdown-mermaid-actions button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
 .markdown-preview-content blockquote {
   border-left: 2px solid var(--border-default);
   color: var(--text-secondary);

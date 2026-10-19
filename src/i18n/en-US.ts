@@ -10,6 +10,9 @@ export const enUS: Record<MessageKey, string> = {
   "markdown.loading": "Rendering preview…",
   "markdown.failed": "Preview rendering failed. Try again.",
   "markdown.refresh": "Refresh preview",
+  "markdown.exportPng": "Save Mermaid diagram as PNG",
+  "markdown.exportSvg": "Save Mermaid diagram as SVG",
+  "markdown.exportFailed": "Could not save the image. Check the location and extension, or try SVG.",
   "markdown.resize": "Drag to resize the editor and preview panes",
   "markdown.manualRefresh":
     "Large-file previews update only when refreshed manually.",

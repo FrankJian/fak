@@ -1,14 +1,13 @@
 /** Markdown HTML 只由 Rust 解析净化，避免前后端安全规则漂移（SPEC F8.1）。 */
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type UIEvent } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type MouseEvent, type UIEvent } from "react";
 import { IconButton } from "../design/components/IconButton";
 import { useTranslation } from "../i18n/useTranslation";
 import { renderMarkdownPreview } from "../ipc/markdown";
-import { openExternalUrl } from "../ipc/opener";
-import { assetUrl } from "../ipc/assets";
-import { isTauriAvailable } from "../ipc/invoke";
 import { renderDiagrams, renderMath } from "./markdownPostProcess";
+import { useMermaidExport } from "./useMermaidExport";
+import { useMarkdownPreviewLinks } from "./useMarkdownPreviewLinks";
+import type { MermaidImageFormat } from "../lib/mermaidExport";
 import { logger } from "../lib/logger";
-import { findMarkdownFragmentTarget, resolveMarkdownLink, resolveMarkdownLinkFromDirectory } from "../lib/markdownLinks";
 import {
   MARKDOWN_SYNC_SCROLL_MS,
   markdownPreviewScrollTop,
@@ -36,9 +35,14 @@ interface MarkdownPreviewProps {
   blockRemoteImages: boolean;
   onOpenDocument: (path: string) => void;
   onPreviewTopLineChange: (line: number) => void;
+  onDiagramCountChange?: (count: number) => void;
 }
 
-export function MarkdownPreview({
+export interface MarkdownPreviewHandle {
+  exportCurrentDiagram: (format: MermaidImageFormat) => Promise<void>;
+}
+
+export const MarkdownPreview = forwardRef<MarkdownPreviewHandle, MarkdownPreviewProps>(function MarkdownPreview({
   documentId,
   documentPath,
   revision,
@@ -50,15 +54,27 @@ export function MarkdownPreview({
   blockRemoteImages,
   onOpenDocument,
   onPreviewTopLineChange,
-}: MarkdownPreviewProps) {
+  onDiagramCountChange,
+}: MarkdownPreviewProps, ref) {
   const { t } = useTranslation();
   const [html, setHtml] = useState(() => renderedCache.get(documentId) ?? "");
+  // 后处理会把源码节点替换为 Mermaid/KaTeX DOM。保持这个 prop 的引用稳定，
+  // 否则滚动导致的普通 React 重渲染会再次写入原始 HTML，覆盖已渲染的图。
+  const previewMarkup = useMemo(() => ({ __html: html }), [html]);
   const [loading, setLoading] = useState(
     autoRefresh && !renderedCache.has(documentId),
   );
   const [failed, setFailed] = useState(false);
   const requestId = useRef(0);
   const contentRef = useRef<HTMLDivElement>(null);
+  const { decorate, exportDiagram, exportFailed, selectFigure } = useMermaidExport({
+    contentRef,
+    documentPath,
+    onDiagramCountChange,
+  });
+  useImperativeHandle(ref, () => ({
+    exportCurrentDiagram: (format) => exportDiagram(format),
+  }), [exportDiagram]);
   const scrollerRef = useRef<HTMLElement>(null);
   const scrollFrameRef = useRef<number | null>(null);
   const programmaticScrollRef = useRef(false);
@@ -126,51 +142,29 @@ export function MarkdownPreview({
     return () => window.clearTimeout(timer);
   }, [autoRefresh, refresh, revision]);
 
-  const openLink = (event: MouseEvent<HTMLElement>) => {
-    const anchor = (event.target as HTMLElement).closest("a");
-    if (!anchor) return;
-    event.preventDefault();
-    const href = anchor.getAttribute("href");
-    const localHref = anchor.dataset.localHref;
-    if (localHref) {
-      const path = documentPath
-        ? resolveMarkdownLink(documentPath, localHref)
-        : anchor.dataset.localDir
-          ? resolveMarkdownLinkFromDirectory(anchor.dataset.localDir, localHref)
-          : null;
-      if (path) onOpenDocument(path);
-      return;
-    }
-    if (href?.startsWith("#")) {
-      const container = contentRef.current;
-      const scroller = scrollerRef.current;
-      const target = container && findMarkdownFragmentTarget(container, href);
-      if (container && scroller && target) {
-        stopScrollAnimation();
-        scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  const openLink = useMarkdownPreviewLinks({
+    contentRef,
+    scrollerRef,
+    documentPath,
+    html,
+    onOpenDocument,
+    stopScrollAnimation,
+  });
+
+  const handleClick = (event: MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    const exportButton = target.closest<HTMLButtonElement>("button[data-mermaid-export]");
+    if (exportButton) {
+      event.preventDefault();
+      const format = exportButton.dataset.mermaidExport;
+      if (format === "png" || format === "svg") {
+        void exportDiagram(format, exportButton.closest<HTMLElement>(".markdown-mermaid"));
       }
       return;
     }
-    if (!href) return;
-    void openExternalUrl(href).catch((error: unknown) =>
-      logger.warn("opening preview link failed", error),
-    );
+    selectFigure(target);
+    openLink(event);
   };
-
-  // Rust 已校验过路径在文档目录之内；这里只做协议转换，不再自己拼路径
-  useEffect(() => {
-    if (!isTauriAvailable()) return;
-    const container = contentRef.current;
-    if (!container) return;
-    for (const image of container.querySelectorAll<HTMLImageElement>(
-      "img[data-local-src]",
-    )) {
-      const path = image.dataset.localSrc;
-      if (!path) continue;
-      image.src = assetUrl(path);
-      delete image.dataset.localSrc;
-    }
-  }, [html]);
 
   // 公式与图表在注入之后就地替换；两者都是动态 import，没用到就不会进包
   useEffect(() => {
@@ -179,10 +173,10 @@ export function MarkdownPreview({
     void renderMath(container).catch((error: unknown) =>
       logger.warn("math post-processing failed", error),
     );
-    void renderDiagrams(container).catch((error: unknown) =>
-      logger.warn("diagram post-processing failed", error),
-    );
-  }, [html]);
+    void renderDiagrams(container)
+      .then(decorate)
+      .catch((error: unknown) => logger.warn("diagram post-processing failed", error));
+  }, [html, decorate]);
 
   // 源码滚到第几行，预览就平滑跟到带那个行号的锚点。每次新目标都会
   // 从当前位置重定向，连续滚动时不会积压一长串动画。
@@ -259,7 +253,9 @@ export function MarkdownPreview({
       ref={scrollerRef}
       aria-label={t("markdown.preview")}
       className="markdown-preview min-h-0 min-w-0 flex-1 overflow-auto border-l border-[var(--border-subtle)] bg-[var(--bg-base)]"
-      onClick={openLink}
+      onClick={handleClick}
+      onPointerOver={(event) => selectFigure(event.target as HTMLElement)}
+      onFocusCapture={(event) => selectFigure(event.target as HTMLElement)}
       onPointerDown={stopScrollAnimation}
       onWheel={stopScrollAnimation}
       onScroll={handlePreviewScroll}
@@ -286,14 +282,19 @@ export function MarkdownPreview({
           {t("markdown.failed")}
         </div>
       )}
+      {exportFailed && (
+        <div role="alert" className="p-[var(--space-2)] text-[var(--danger)]">
+          {t("markdown.exportFailed")}
+        </div>
+      )}
       {!loading && !failed && (
         <div
           ref={contentRef}
           className="markdown-preview-content"
           // Rust renders and sanitizes once before this injection (SPEC F8.1).
-          dangerouslySetInnerHTML={{ __html: html }}
+          dangerouslySetInnerHTML={previewMarkup}
         />
       )}
     </aside>
   );
-}
+});

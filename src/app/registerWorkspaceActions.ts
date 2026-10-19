@@ -49,6 +49,9 @@ export interface PanelActions {
   openSettings: (group?: SettingsGroup) => void;
   checkForUpdates: () => void;
   toggleMarkdownPreview: () => void;
+  hasMermaidDiagram: () => boolean;
+  exportMermaidPng: () => void;
+  exportMermaidSvg: () => void;
   toggleQuickAccessBar: () => void;
   formatMarkdown: (format: MarkdownFormat) => void;
   toggleOutlinePanel: () => void;
@@ -363,6 +366,23 @@ export function registerWorkspaceActions(
     icon: "preview",
     when: hasDoc,
     run: () => panels.toggleMarkdownPreview(),
+  });
+
+  registerAction({
+    id: "markdown.exportPng",
+    titleKey: "markdown.exportPng",
+    categoryKey: "category.file",
+    icon: "export",
+    when: () => panels.hasMermaidDiagram(),
+    run: () => panels.exportMermaidPng(),
+  });
+  registerAction({
+    id: "markdown.exportSvg",
+    titleKey: "markdown.exportSvg",
+    categoryKey: "category.file",
+    icon: "export",
+    when: () => panels.hasMermaidDiagram(),
+    run: () => panels.exportMermaidSvg(),
   });
 
   // 不声明 Ctrl+X/C/V：那三个由 CodeMirror 原生处理，抢过来会弄坏 IME 与选区语义。

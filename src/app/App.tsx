@@ -41,7 +41,7 @@ import {
   markdownEditorSplitFromDrag,
 } from "../lib/markdownSplit";
 import { GoToLinePanel } from "../panels/GoToLinePanel";
-import { MarkdownPreview } from "../panels/MarkdownPreview";
+import { MarkdownPreview, type MarkdownPreviewHandle } from "../panels/MarkdownPreview";
 import { MarkdownToolbar } from "../panels/MarkdownToolbar";
 import { OutlinePanel } from "../panels/OutlinePanel";
 import { QuickOpenPanel } from "../panels/QuickOpenPanel";
@@ -171,6 +171,8 @@ export function App() {
   const [findScope, setFindScope] = useState<FindScope>("document");
   const [markdownPreviewMode, setMarkdownPreviewMode] =
     useState<MarkdownPreviewMode>("hidden");
+  const markdownPreviewRef = useRef<MarkdownPreviewHandle>(null);
+  const [mermaidDiagramCount, setMermaidDiagramCount] = useState(0);
   const [editorRevision, setEditorRevision] = useState(0);
   const [previewTopLine, setPreviewTopLine] = useState(0);
   const [previewSourceProgress, setPreviewSourceProgress] = useState(0);
@@ -874,6 +876,9 @@ export function App() {
         openSettings: (group = "general") => setSettingsGroup(group),
         checkForUpdates: () => checkForUpdatesNow(),
         toggleMarkdownPreview,
+        hasMermaidDiagram: () => markdownPreviewMode !== "hidden" && mermaidDiagramCount > 0,
+        exportMermaidPng: () => void markdownPreviewRef.current?.exportCurrentDiagram("png"),
+        exportMermaidSvg: () => void markdownPreviewRef.current?.exportCurrentDiagram("svg"),
         toggleQuickAccessBar,
         formatMarkdown,
         refreshOutline: outline.refresh,
@@ -919,6 +924,8 @@ export function App() {
     openFolder,
     fileTree,
     toggleMarkdownPreview,
+    markdownPreviewMode,
+    mermaidDiagramCount,
     toggleQuickAccessBar,
     formatMarkdown,
     textTools,
@@ -1251,6 +1258,8 @@ export function App() {
                   }
                 >
                   <MarkdownPreview
+                    key={activeTab.meta.documentId}
+                    ref={markdownPreviewRef}
                     documentId={activeTab.meta.documentId}
                     documentPath={activeTab.path}
                     revision={editorRevision}
@@ -1262,6 +1271,7 @@ export function App() {
                     blockRemoteImages={previewBlockRemoteImages}
                     onOpenDocument={(path) => void workspace.openAtPath(path)}
                     onPreviewTopLineChange={(line) => workspace.handleRef.current?.scrollToLine(line)}
+                    onDiagramCountChange={setMermaidDiagramCount}
                   />
                 </div>
               )}
