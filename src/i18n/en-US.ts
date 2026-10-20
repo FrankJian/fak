@@ -13,6 +13,7 @@ export const enUS: Record<MessageKey, string> = {
   "markdown.exportPng": "Save Mermaid diagram as PNG",
   "markdown.exportSvg": "Save Mermaid diagram as SVG",
   "markdown.exportFailed": "Could not save the image. Check the location and extension, or try SVG.",
+  "imagePreview.unavailable": "This image could not be displayed. It may be damaged or unsupported by the system WebView.",
   "markdown.resize": "Drag to resize the editor and preview panes",
   "markdown.manualRefresh":
     "Large-file previews update only when refreshed manually.",
@@ -751,6 +752,8 @@ export const enUS: Record<MessageKey, string> = {
 
   "error.unknown.title": "Something went wrong",
   "error.unknown.next": "Retry, or open the log directory for details",
+  "error.showDetails": "Show error details",
+  "error.diagnosticCode": "Error code: {code}",
   "error.detail.fileTooLarge": "File is {size}; the limit is {limit}",
   "error.detail.versionConflict": "Expected version {expected}, got {actual}",
   "error.detail.invalidRegex": "Regex error: {detail}",

@@ -161,10 +161,28 @@ describe("useWorkspace 标签正文", () => {
     vi.mocked(readAllText).mockClear();
     await act(async () => { await result.current.openAtPath("/real/work/notes.md"); });
 
-    expect(openFile).toHaveBeenCalledWith("/real/work/notes.md");
+    expect(openFile).toHaveBeenCalledWith("/real/work/notes.md", false);
     expect(readAllText).not.toHaveBeenCalled();
     expect(useDocumentStore.getState().tabs).toHaveLength(1);
     expect(useDocumentStore.getState().activeId).toBe("new-file");
+  });
+
+  it("打开图片时确认二进制内容，并且不把它加载进文本编辑器", async () => {
+    const image = { ...meta("diagram", "diagram.png"), looksBinary: true };
+    vi.mocked(openFile).mockResolvedValue(image);
+    const { result } = renderHook(() => useWorkspace());
+
+    await act(async () => {
+      await result.current.openAtPath("/work/diagram.png");
+    });
+
+    expect(openFile).toHaveBeenCalledWith("/work/diagram.png", true);
+    expect(readAllText).not.toHaveBeenCalled();
+    expect(result.current.textDocumentId).toBeNull();
+    expect(useDocumentStore.getState().tabs[0]).toMatchObject({
+      meta: { documentId: "diagram" },
+      path: "/work/diagram.png",
+    });
   });
 
   it("撤销前先同步编辑器，避免 Markdown 工具栏编辑仍在合并窗口中", async () => {

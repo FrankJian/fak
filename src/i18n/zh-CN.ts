@@ -11,6 +11,7 @@ export const zhCN = {
   "markdown.exportPng": "保存 Mermaid 图为 PNG",
   "markdown.exportSvg": "保存 Mermaid 图为 SVG",
   "markdown.exportFailed": "图片保存失败。请检查保存位置与文件扩展名，或尝试 SVG 格式。",
+  "imagePreview.unavailable": "无法显示此图片。文件可能已损坏或该格式不受系统 WebView 支持。",
   "markdown.resize": "拖拽调整编辑区与预览区宽度",
   "markdown.manualRefresh": "大文件预览仅在手动刷新时更新。",
   "markdown.toolbar": "Markdown 工具栏",
@@ -704,6 +705,8 @@ export const zhCN = {
 
   "error.unknown.title": "发生未知错误",
   "error.unknown.next": "重试，或打开日志目录查看详情",
+  "error.showDetails": "查看错误详情",
+  "error.diagnosticCode": "错误代码：{code}",
   "error.detail.fileTooLarge": "文件 {size}，可打开上限 {limit}",
   "error.detail.versionConflict": "期望版本 {expected}，实际 {actual}",
   "error.detail.invalidRegex": "正则表达式错误：{detail}",

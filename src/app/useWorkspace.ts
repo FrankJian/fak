@@ -29,6 +29,7 @@ import { useAppStore } from "../store/appStore";
 import { useDocumentStore } from "../store/documentStore";
 import { logger } from "../lib/logger";
 import { noteRecentFile } from "../lib/quickOpen";
+import { isImageFilePath } from "../lib/imageFile";
 import { sameFilePath } from "../lib/workspacePath";
 
 export interface WorkspaceState {
@@ -142,6 +143,7 @@ export function useWorkspace(): WorkspaceState {
 
   useEffect(() => {
     if (!activeMeta || activeMeta.mode === "stream") return;
+    if (activeTab?.path && isImageFilePath(activeTab.path)) return;
     if (loadedTextRef.current.documentId === activeMeta.documentId) return;
 
     let cancelled = false;
@@ -155,16 +157,17 @@ export function useWorkspace(): WorkspaceState {
     return () => {
       cancelled = true;
     };
-  }, [activeMeta, report, storeText]);
+  }, [activeMeta, activeTab?.path, report, storeText]);
 
   const load = useCallback(
     async (meta: DocumentMeta, path: string | null = null) => {
       // Tier C 不把正文拉到前端（SPEC §4.1），编辑器改用虚拟列表——尚未接入
+      const isImage = path !== null && isImageFilePath(path);
       const body =
-        meta.mode === "stream"
+        meta.mode === "stream" || isImage
           ? ""
           : await readAllText(meta.documentId, meta.lineCount);
-      storeText(meta.mode === "stream" ? null : meta.documentId, body);
+      storeText(meta.mode === "stream" || isImage ? null : meta.documentId, body);
       addTab(meta, path);
       // 最近文件表只能在这里维护：`DocumentMeta` 不带完整路径（SPEC §10.2），
       // 前端唯一知道路径的时机就是自己发起打开的这一刻
@@ -184,7 +187,7 @@ export function useWorkspace(): WorkspaceState {
         await activateDocument(existing.meta.documentId);
         return;
       }
-      const meta = await openFile(selected);
+      const meta = await openFile(selected, isImageFilePath(selected));
       if (useDocumentStore.getState().tabs.some((tab) => tab.meta.documentId === meta.documentId)) {
         await activateDocument(meta.documentId);
         return;
@@ -205,7 +208,7 @@ export function useWorkspace(): WorkspaceState {
         return;
       }
       try {
-        const meta = await openFile(path);
+        const meta = await openFile(path, isImageFilePath(path));
         if (useDocumentStore.getState().tabs.some((tab) => tab.meta.documentId === meta.documentId)) {
           await activateDocument(meta.documentId);
           return;

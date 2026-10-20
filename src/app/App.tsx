@@ -42,6 +42,7 @@ import {
 } from "../lib/markdownSplit";
 import { GoToLinePanel } from "../panels/GoToLinePanel";
 import { MarkdownPreview, type MarkdownPreviewHandle } from "../panels/MarkdownPreview";
+import { ImagePreview } from "../panels/ImagePreview";
 import { MarkdownToolbar } from "../panels/MarkdownToolbar";
 import { OutlinePanel } from "../panels/OutlinePanel";
 import { QuickOpenPanel } from "../panels/QuickOpenPanel";
@@ -57,7 +58,7 @@ import { LineEndingPicker } from "../panels/LineEndingPicker";
 import { RecoveryBar } from "../panels/RecoveryBar";
 import { SaveConflictDialog } from "../panels/SaveConflictDialog";
 import { PromoteStreamDialog } from "../panels/PromoteStreamDialog";
-import { configFilePath } from "../ipc/config";
+import { configFilePath, logDirectory } from "../ipc/config";
 import { onNativeMenuAction } from "../ipc/nativeMenu";
 import { openBackupDiff } from "../ipc/backup";
 import { copyToClipboard, readFromClipboard } from "../ipc/clipboard";
@@ -66,6 +67,7 @@ import { revealInFileManager } from "../ipc/opener";
 import { countWords, type WordCount } from "../ipc/textops";
 import { onCloseRequested } from "../ipc/window";
 import { syntaxFileName, syntaxKeyFromFileName } from "../lib/syntaxKey";
+import { isImageFilePath } from "../lib/imageFile";
 import type { SyntaxSelection } from "../lib/syntaxKey";
 import type { SettingsGroup } from "../lib/settingsSchema";
 import { logger } from "../lib/logger";
@@ -93,6 +95,7 @@ import {
   type EditorMenuEntry,
 } from "../editor/EditorContextMenu";
 import { StatusBar } from "./StatusBar";
+import { ProblemBanner } from "./ProblemBanner";
 import { TabBar } from "./TabBar";
 import { Toolbar } from "./Toolbar";
 import { useAppearance } from "./useAppearance";
@@ -231,6 +234,7 @@ export function App() {
       ? syntaxFileName(activeTab.syntaxOverride)
       : activeTab?.path ?? activeTab?.meta.fileName ?? null;
   const isMarkdown = selectedSyntax === "markdown";
+  const isImage = activeTab !== null && isImageFilePath(activeTab.path ?? activeTab.meta.fileName);
   const canPreviewMarkdown =
     isMarkdown && activeTab?.meta.mode !== "stream" && !activeDiff;
   const showFileTypePicker =
@@ -1167,6 +1171,12 @@ export function App() {
             onClose={() => closeDiff(activeDiff.id)}
             navigationRef={diffNavigation}
           />
+        ) : isImage && activeTab?.path ? (
+          <ImagePreview
+            key={activeTab.meta.documentId}
+            path={activeTab.path}
+            fileName={activeTab.meta.fileName}
+          />
         ) : activeTab?.meta.mode === "stream" ? (
           <StreamViewer
             key={activeTab.meta.documentId}
@@ -1288,37 +1298,15 @@ export function App() {
       </div>
 
       {workspace.problem && (
-        <div
-          role="alert"
-          className="flex shrink-0 items-start gap-2 border-t border-[var(--border-default)] bg-[var(--bg-raised)] px-3 py-2"
-          style={{ fontSize: "var(--font-size-small)" }}
-        >
-          <span style={{ color: "var(--danger)" }}>
-            <Icon name="error" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[var(--text-primary)]">
-              {workspace.problem.title}
-            </span>
-            {workspace.problem.detail && (
-              <span className="block text-[var(--text-secondary)]">
-                {workspace.problem.detail}
-              </span>
-            )}
-            {/* SPEC ?4.5?????????????????????? */}
-            <span className="block text-[var(--text-secondary)]">
-              {workspace.problem.next}
-            </span>
-          </span>
-          <button
-            type="button"
-            aria-label={t("dialog.close")}
-            onClick={workspace.dismissProblem}
-            className="inline-flex size-[var(--h-icon-button)] shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent-border)]"
-          >
-            <Icon name="close" variant="menu" />
-          </button>
-        </div>
+        <ProblemBanner
+          problem={workspace.problem}
+          onDismiss={workspace.dismissProblem}
+          onOpenLogs={() => {
+            void logDirectory()
+              .then((path) => revealInFileManager(path))
+              .catch(workspace.report);
+          }}
+        />
       )}
 
       <StatusBar
