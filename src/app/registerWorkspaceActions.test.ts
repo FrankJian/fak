@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clearActions,
   getDefaultShortcut,
@@ -84,5 +84,20 @@ describe("workspace action shortcuts", () => {
     available = true;
     expect(png && isEnabled(png, context)).toBe(true);
     expect(svg && isEnabled(svg, context)).toBe(true);
+  });
+
+  it("exposes every preset theme as an immediately applicable command", () => {
+    const setTheme = vi.fn();
+    registerWorkspaceActions(
+      {} as RegisterArgs[0],
+      {} as RegisterArgs[1],
+      { setTheme } as unknown as RegisterArgs[2],
+      {} as RegisterArgs[3],
+    );
+
+    const theme = getAction("settings.theme.highContrastCyan");
+    expect(theme).toBeDefined();
+    void theme?.run(context);
+    expect(setTheme).toHaveBeenCalledWith("highContrastCyan");
   });
 });

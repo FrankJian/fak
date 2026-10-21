@@ -273,7 +273,12 @@ export const SETTINGS: readonly SettingDescriptor[] = [
     { value: "system", labelKey: "settings.theme.system" },
     { value: "light", labelKey: "settings.theme.light" },
     { value: "dark", labelKey: "settings.theme.dark" },
+    { value: "solarizedLight", labelKey: "settings.theme.solarizedLight" },
+    { value: "forestDark", labelKey: "settings.theme.forestDark" },
+    { value: "midnight", labelKey: "settings.theme.midnight" },
     { value: "highContrast", labelKey: "settings.theme.highContrast" },
+    { value: "highContrastCyan", labelKey: "settings.theme.highContrastCyan" },
+    { value: "highContrastLime", labelKey: "settings.theme.highContrastLime" },
   ]),
   choice("appearance", "density", [
     { value: "compact", labelKey: "settings.density.compact" },

@@ -10,12 +10,16 @@ describe("FileTreeContextMenu", () => {
         x={20}
         y={30}
         canModify
+        isRoot={false}
         onClose={vi.fn()}
+        onCreateFile={vi.fn()}
+        onCreateFolder={vi.fn()}
         onRename={vi.fn()}
         onDelete={vi.fn()}
         onCopyPath={vi.fn()}
         onCopyRelativePath={vi.fn()}
         onReveal={vi.fn()}
+        onRemoveRoot={vi.fn()}
       />,
     );
 
@@ -24,11 +28,36 @@ describe("FileTreeContextMenu", () => {
       "p-[var(--space-1)]",
     );
     const items = screen.getAllByRole("menuitem");
-    expect(items).toHaveLength(5);
+    expect(items).toHaveLength(7);
     expect(items.every((item) => item.querySelector("svg") !== null)).toBe(true);
     await waitFor(() => expect(items[0]).toHaveFocus());
     fireEvent.keyDown(items[0], { key: "ArrowDown" });
     expect(items[1]).toHaveFocus();
+  });
+
+  it("offers removing the workspace folder only on the root node", () => {
+    const removeRoot = vi.fn();
+    render(
+      <FileTreeContextMenu
+        node={{ path: "/work", name: "work", kind: "directory" }}
+        x={20}
+        y={30}
+        canModify={false}
+        isRoot
+        onClose={vi.fn()}
+        onCreateFile={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onCopyPath={vi.fn()}
+        onCopyRelativePath={vi.fn()}
+        onReveal={vi.fn()}
+        onRemoveRoot={removeRoot}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "从文件树移除文件夹" }));
+    expect(removeRoot).toHaveBeenCalledOnce();
   });
 });
 

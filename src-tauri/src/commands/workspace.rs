@@ -97,7 +97,17 @@ pub struct RenameWorkspaceEntryArgs {
     pub name: String,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateWorkspaceEntryArgs {
+    pub root: PathBuf,
+    /// 已规范化的目标目录；允许等于工作区根目录。
+    pub directory: PathBuf,
+    pub name: String,
+    pub kind: WorkspaceEntryKind,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceEntryKind {
     Directory,
@@ -185,6 +195,18 @@ pub async fn rename_workspace_entry(
     Ok(entry)
 }
 
+/// 在已打开工作区的一个目录内创建空文件或文件夹。
+///
+/// `directory` 与 `root` 都会重新规范化，不能借由前端传入的路径越出工作区。
+#[tauri::command]
+pub async fn create_workspace_entry(args: CreateWorkspaceEntryArgs) -> AppResult<WorkspaceEntry> {
+    tauri::async_runtime::spawn_blocking(move || {
+        create_workspace_entry_sync(&args.root, &args.directory, &args.name, args.kind)
+    })
+    .await
+    .map_err(|_| AppError::Io { os_code: None })?
+}
+
 /// 默认删除路径：尽最大努力移入系统回收站，绝不在这里直接 unlink。
 /// 回收站不可用时，前端必须明确提示并再次确认，才可调用永久删除命令。
 #[tauri::command]
@@ -253,6 +275,29 @@ fn workspace_entry_path(root: &Path, path: &Path) -> AppResult<PathBuf> {
     Ok(path)
 }
 
+/// 创建的目标是目录，所以工作区根目录本身是合法目标；重命名和删除不适用此规则。
+fn workspace_directory_path(root: &Path, directory: &Path) -> AppResult<PathBuf> {
+    let root = std::fs::canonicalize(root).map_err(|error| AppError::from_io(&error, root))?;
+    if !root.is_dir() {
+        return Err(AppError::NotDirectory {
+            path_hint: crate::error::path_hint(&root),
+        });
+    }
+    let directory =
+        std::fs::canonicalize(directory).map_err(|error| AppError::from_io(&error, directory))?;
+    if !directory.is_dir() {
+        return Err(AppError::NotDirectory {
+            path_hint: crate::error::path_hint(&directory),
+        });
+    }
+    if !directory.starts_with(&root) {
+        return Err(AppError::InvalidPath {
+            path_hint: crate::error::path_hint(&directory),
+        });
+    }
+    Ok(directory)
+}
+
 fn validate_entry_name(name: &str) -> AppResult<()> {
     let trimmed = name.trim();
     let invalid = trimmed.is_empty()
@@ -316,6 +361,37 @@ fn rename_workspace_entry_with_paths(
         kind,
     };
     Ok((entry, path, destination))
+}
+
+fn create_workspace_entry_sync(
+    root: &Path,
+    directory: &Path,
+    name: &str,
+    kind: WorkspaceEntryKind,
+) -> AppResult<WorkspaceEntry> {
+    validate_entry_name(name)?;
+    let directory = workspace_directory_path(root, directory)?;
+    let destination = directory.join(name.trim());
+    if destination.exists() {
+        return Err(AppError::AlreadyExists {
+            path_hint: crate::error::path_hint(&destination),
+        });
+    }
+    match kind {
+        WorkspaceEntryKind::Directory => {
+            std::fs::create_dir(&destination)
+                .map_err(|error| AppError::from_io(&error, &destination))?;
+        }
+        WorkspaceEntryKind::File => {
+            std::fs::File::create(&destination)
+                .map_err(|error| AppError::from_io(&error, &destination))?;
+        }
+    }
+    Ok(WorkspaceEntry {
+        path: destination.to_string_lossy().into_owned(),
+        name: name.trim().to_owned(),
+        kind,
+    })
 }
 
 fn sync_document_paths_after_rename(state: &AppState, source: &Path, destination: &Path) {
@@ -501,6 +577,68 @@ mod tests {
         assert_eq!(entry.kind, WorkspaceEntryKind::File);
         assert!(directory.path().join("renamed.txt").is_file());
         assert!(!original.exists());
+    }
+
+    #[test]
+    fn creates_files_and_directories_at_the_requested_workspace_directory() {
+        let root = tempfile::tempdir().expect("工作区");
+        let nested = root.path().join("nested");
+        std::fs::create_dir(&nested).expect("子目录");
+
+        let file = create_workspace_entry_sync(
+            root.path(),
+            root.path(),
+            "notes.md",
+            WorkspaceEntryKind::File,
+        )
+        .expect("创建文件");
+        let directory = create_workspace_entry_sync(
+            root.path(),
+            &nested,
+            "assets",
+            WorkspaceEntryKind::Directory,
+        )
+        .expect("创建目录");
+
+        assert_eq!(file.kind, WorkspaceEntryKind::File);
+        assert!(root.path().join("notes.md").is_file());
+        assert_eq!(directory.kind, WorkspaceEntryKind::Directory);
+        assert!(nested.join("assets").is_dir());
+    }
+
+    #[test]
+    fn create_rejects_outside_directories_invalid_names_and_conflicts() {
+        let root = tempfile::tempdir().expect("工作区");
+        let outside = tempfile::tempdir().expect("工作区外");
+        std::fs::write(root.path().join("taken.txt"), "").expect("文件");
+
+        assert!(matches!(
+            create_workspace_entry_sync(
+                root.path(),
+                outside.path(),
+                "outside.txt",
+                WorkspaceEntryKind::File,
+            ),
+            Err(AppError::InvalidPath { .. })
+        ));
+        assert!(matches!(
+            create_workspace_entry_sync(
+                root.path(),
+                root.path(),
+                "folder/name",
+                WorkspaceEntryKind::Directory,
+            ),
+            Err(AppError::InvalidPath { .. })
+        ));
+        assert!(matches!(
+            create_workspace_entry_sync(
+                root.path(),
+                root.path(),
+                "taken.txt",
+                WorkspaceEntryKind::File,
+            ),
+            Err(AppError::AlreadyExists { .. })
+        ));
     }
 
     #[test]

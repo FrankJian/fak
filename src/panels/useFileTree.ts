@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauriAvailable } from "../ipc/invoke";
 import {
+  createWorkspaceEntry,
   listDirectory,
   moveWorkspaceEntryToTrash,
   onWorkspaceDirectoryChanged,
@@ -24,10 +25,17 @@ export interface FileTreeController {
   root: FileTreeNode | null;
   loadingPath: string | null;
   openRoot: (path: string) => Promise<void>;
+  /** 只取消工作区关联，不触碰磁盘上的文件。 */
+  removeRoot: () => Promise<void>;
   toggle: (path: string) => Promise<void>;
   refresh: () => Promise<void>;
   collapseAll: () => void;
   rename: (path: string, name: string) => Promise<void>;
+  create: (
+    directory: string,
+    name: string,
+    kind: WorkspaceEntry["kind"],
+  ) => Promise<void>;
   moveToTrash: (path: string) => Promise<"moved" | "unavailable">;
   permanentlyDelete: (path: string) => Promise<void>;
   expandedPaths: () => string[];
@@ -219,6 +227,14 @@ export function useFileTree(
     [loadChildren, startWatching, stopAllWatching, stopWatching],
   );
 
+  const removeRoot = useCallback(async () => {
+    // 先让目录变更事件失去目标，再异步释放 watcher，避免晚到的事件把刚移除的
+    // 文件树重新填回来。
+    rootRef.current = null;
+    setRoot(null);
+    await stopAllWatching();
+  }, [stopAllWatching]);
+
   const toggle = useCallback(
     async (path: string) => {
       const current = root;
@@ -331,6 +347,16 @@ export function useFileTree(
     [reloadDirectory, renamePaths, rootPath],
   );
 
+  const create = useCallback(
+    async (directory: string, name: string, kind: WorkspaceEntry["kind"]) => {
+      const root = rootPath();
+      if (!root) return;
+      await createWorkspaceEntry(root, directory, name, kind);
+      await reloadDirectory(directory);
+    },
+    [reloadDirectory, rootPath],
+  );
+
   const moveToTrash = useCallback(
     async (path: string) => {
       const root = rootPath();
@@ -370,10 +396,12 @@ export function useFileTree(
     root,
     loadingPath,
     openRoot,
+    removeRoot,
     toggle,
     refresh,
     collapseAll,
     rename,
+    create,
     moveToTrash,
     permanentlyDelete,
     expandedPaths,

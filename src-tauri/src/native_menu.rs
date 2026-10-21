@@ -138,6 +138,33 @@ fn item<R: tauri::Runtime>(
     }
 }
 
+/// 原生「关于」对话框不读取前端设置页；在这里从运行时包信息生成，保证版本号仍只有
+/// `Cargo.toml` 这一处真相源（AGENTS.md §3）。
+fn about_metadata(
+    name: String,
+    version: String,
+    authors: &str,
+    description: &str,
+) -> AboutMetadata<'static> {
+    AboutMetadata {
+        name: Some(name),
+        version: Some(version),
+        authors: (!authors.is_empty()).then(|| vec![authors.to_string()]),
+        comments: (!description.is_empty()).then(|| description.to_string()),
+        ..Default::default()
+    }
+}
+
+fn app_about_metadata(app: &tauri::AppHandle) -> AboutMetadata<'static> {
+    let package = app.package_info();
+    about_metadata(
+        package.name.clone(),
+        package.version.to_string(),
+        package.authors,
+        package.description,
+    )
+}
+
 pub fn install_on_handle(app: &tauri::AppHandle, config: &Config) -> tauri::Result<()> {
     let labels = Labels::for_language(config.language);
 
@@ -221,19 +248,20 @@ pub fn install_on_handle(app: &tauri::AppHandle, config: &Config) -> tauri::Resu
         .close_window_with_text(labels.close_window)
         .build()?;
 
+    let about_metadata = app_about_metadata(app);
     let mut help_builder =
         SubmenuBuilder::with_id(app, HELP_SUBMENU_ID, labels.help).item(&check_updates);
     if !cfg!(target_os = "macos") {
         help_builder = help_builder
             .separator()
-            .about_with_text(labels.about, Some(AboutMetadata::default()));
+            .about_with_text(labels.about, Some(about_metadata.clone()));
     }
     let help_menu = help_builder.build()?;
 
     let mut menu_builder = MenuBuilder::new(app);
     if cfg!(target_os = "macos") {
         let app_menu = SubmenuBuilder::new(app, "Fak")
-            .about_with_text(labels.about, Some(AboutMetadata::default()))
+            .about_with_text(labels.about, Some(about_metadata))
             .separator()
             .item(&settings)
             .separator()
@@ -283,5 +311,22 @@ mod tests {
         assert!(ACTION_IDS.iter().all(|id| id.contains('.')));
         assert!(ACTION_IDS.contains(&"view.quickAccessBar"));
         assert!(ACTION_IDS.contains(&"view.fileTree"));
+    }
+
+    #[test]
+    fn about_metadata_keeps_runtime_package_information() {
+        let metadata = about_metadata(
+            "Fak".to_string(),
+            env!("CARGO_PKG_VERSION").to_string(),
+            "Fak contributors",
+            "Fak text and code editor",
+        );
+        assert_eq!(metadata.name.as_deref(), Some("Fak"));
+        assert_eq!(metadata.version.as_deref(), Some(env!("CARGO_PKG_VERSION")));
+        assert_eq!(metadata.authors, Some(vec!["Fak contributors".to_string()]));
+        assert_eq!(
+            metadata.comments.as_deref(),
+            Some("Fak text and code editor")
+        );
     }
 }

@@ -5,6 +5,7 @@
  * `scripts/check-commands.mjs` 守卫这条纪律。
  */
 import { configFilePath } from "../ipc/config";
+import type { Config } from "../ipc/config";
 import {
   clearActions,
   isRopeDocumentReady,
@@ -40,6 +41,7 @@ export interface PanelActions {
   toggleFileTree: () => void;
   refreshFileTree: () => void;
   collapseFileTree: () => void;
+  removeWorkspaceRoot: () => void;
   toggleBookmark: () => void;
   nextBookmark: () => void;
   previousBookmark: () => void;
@@ -47,6 +49,9 @@ export interface PanelActions {
   toggleBookmarkPanel: () => void;
   openWordCount: () => void;
   openSettings: (group?: SettingsGroup) => void;
+  setTheme: (theme: Config["theme"]) => void;
+  setDensity: (density: Config["density"]) => void;
+  setLanguage: (language: Config["language"]) => void;
   checkForUpdates: () => void;
   toggleMarkdownPreview: () => void;
   hasMermaidDiagram: () => boolean;
@@ -336,6 +341,190 @@ export function registerWorkspaceActions(
     icon: "settings",
     shortcut: "Ctrl+K Ctrl+S",
     run: () => panels.openSettings("shortcuts"),
+  });
+
+  registerAction({
+    id: "settings.openGeneral",
+    titleKey: "settings.openGroup.general",
+    categoryKey: "category.settings",
+    icon: "settings",
+    run: () => panels.openSettings("general"),
+  });
+
+  registerAction({
+    id: "settings.openAppearance",
+    titleKey: "settings.openGroup.appearance",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.openSettings("appearance"),
+  });
+
+  registerAction({
+    id: "settings.openEditing",
+    titleKey: "settings.openGroup.editing",
+    categoryKey: "category.settings",
+    icon: "fileSyntax",
+    run: () => panels.openSettings("editing"),
+  });
+
+  registerAction({
+    id: "settings.openFindDiff",
+    titleKey: "settings.openGroup.findDiff",
+    categoryKey: "category.settings",
+    icon: "find",
+    run: () => panels.openSettings("findDiff"),
+  });
+
+  registerAction({
+    id: "settings.openMarkdown",
+    titleKey: "settings.openGroup.markdown",
+    categoryKey: "category.settings",
+    icon: "preview",
+    run: () => panels.openSettings("markdown"),
+  });
+
+  registerAction({
+    id: "settings.openUpdates",
+    titleKey: "settings.openGroup.updates",
+    categoryKey: "category.settings",
+    icon: "update",
+    run: () => panels.openSettings("updates"),
+  });
+
+  registerAction({
+    id: "settings.openTools",
+    titleKey: "settings.openGroup.tools",
+    categoryKey: "category.settings",
+    icon: "externalTool",
+    run: () => panels.openSettings("tools"),
+  });
+
+  registerAction({
+    id: "settings.openDataSafety",
+    titleKey: "settings.openGroup.dataSafety",
+    categoryKey: "category.settings",
+    icon: "backup",
+    run: () => panels.openSettings("dataSafety"),
+  });
+
+  registerAction({
+    id: "settings.openAbout",
+    titleKey: "settings.openGroup.about",
+    categoryKey: "category.settings",
+    icon: "info",
+    run: () => panels.openSettings("about"),
+  });
+
+  registerAction({
+    id: "settings.theme.system",
+    titleKey: "command.theme.system",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setTheme("system"),
+  });
+
+  registerAction({
+    id: "settings.theme.light",
+    titleKey: "command.theme.light",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setTheme("light"),
+  });
+
+  registerAction({
+    id: "settings.theme.dark",
+    titleKey: "command.theme.dark",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setTheme("dark"),
+  });
+
+  registerAction({
+    id: "settings.theme.solarizedLight",
+    titleKey: "command.theme.solarizedLight",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setTheme("solarizedLight"),
+  });
+
+  registerAction({
+    id: "settings.theme.forestDark",
+    titleKey: "command.theme.forestDark",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setTheme("forestDark"),
+  });
+
+  registerAction({
+    id: "settings.theme.midnight",
+    titleKey: "command.theme.midnight",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setTheme("midnight"),
+  });
+
+  registerAction({
+    id: "settings.theme.highContrast",
+    titleKey: "command.theme.highContrast",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setTheme("highContrast"),
+  });
+
+  registerAction({
+    id: "settings.theme.highContrastCyan",
+    titleKey: "command.theme.highContrastCyan",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setTheme("highContrastCyan"),
+  });
+
+  registerAction({
+    id: "settings.theme.highContrastLime",
+    titleKey: "command.theme.highContrastLime",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setTheme("highContrastLime"),
+  });
+
+  registerAction({
+    id: "settings.density.compact",
+    titleKey: "command.density.compact",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setDensity("compact"),
+  });
+
+  registerAction({
+    id: "settings.density.standard",
+    titleKey: "command.density.standard",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setDensity("standard"),
+  });
+
+  registerAction({
+    id: "settings.density.comfortable",
+    titleKey: "command.density.comfortable",
+    categoryKey: "category.settings",
+    icon: "appearance",
+    run: () => panels.setDensity("comfortable"),
+  });
+
+  registerAction({
+    id: "settings.language.zhCN",
+    titleKey: "command.language.zhCN",
+    categoryKey: "category.settings",
+    icon: "language",
+    run: () => panels.setLanguage("zh-CN"),
+  });
+
+  registerAction({
+    id: "settings.language.enUS",
+    titleKey: "command.language.enUS",
+    categoryKey: "category.settings",
+    icon: "language",
+    run: () => panels.setLanguage("en-US"),
   });
 
   // SPEC §9.3 第 8 条的「逃生舱」：本版本的设置界面只覆盖 F11 的 A/B/C/E 四组，
@@ -719,6 +908,14 @@ export function registerWorkspaceActions(
     categoryKey: "category.view",
     icon: "collapseAll",
     run: () => panels.collapseFileTree(),
+  });
+
+  registerAction({
+    id: "file.removeWorkspaceFolder",
+    titleKey: "fileTree.removeRoot",
+    categoryKey: "category.file",
+    icon: "remove",
+    run: () => panels.removeWorkspaceRoot(),
   });
 
   // 查找面板上的每个图标按钮都要有对应条目（§6.6.2 三项补偿之三）。

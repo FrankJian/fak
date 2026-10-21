@@ -1,5 +1,6 @@
 //! 编辑同步与撤销命令（SPEC ADR-03、F3.5）。
 
+use crate::coord::{char_to_position, char_to_utf16, position_to_char, Position};
 use crate::error::{AppError, AppResult};
 use crate::state::{AppState, Change, Document, EditError};
 use crate::undo::{inverse_of, CoalesceKey, EditKind};
@@ -60,6 +61,53 @@ pub struct Utf16Change {
     pub insert: String,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Utf16Selection {
+    pub anchor: usize,
+    pub head: usize,
+}
+
+fn selection_positions(document: &Document, selection: Utf16Selection) -> Vec<Position> {
+    [selection.anchor, selection.head]
+        .into_iter()
+        .map(|offset| {
+            let index = crate::coord::utf16_to_char(&document.rope, offset);
+            char_to_position(&document.rope, index)
+        })
+        .collect()
+}
+
+fn selection_from_positions(document: &Document, positions: &[Position]) -> Option<Utf16Selection> {
+    let [anchor, head] = positions else {
+        return None;
+    };
+    Some(Utf16Selection {
+        anchor: char_to_utf16(&document.rope, position_to_char(&document.rope, *anchor)),
+        head: char_to_utf16(&document.rope, position_to_char(&document.rope, *head)),
+    })
+}
+
+fn fallback_selection(
+    document: &Document,
+    changes: &[Change],
+    after_insert: bool,
+) -> Utf16Selection {
+    let at = changes.first().map_or(0, |change| {
+        change.from
+            + if after_insert {
+                change.insert.chars().count()
+            } else {
+                0
+            }
+    });
+    let offset = char_to_utf16(&document.rope, at);
+    Utf16Selection {
+        anchor: offset,
+        head: offset,
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplyEditsArgs {
@@ -68,6 +116,8 @@ pub struct ApplyEditsArgs {
     pub base_version: u64,
     pub changes: Vec<Utf16Change>,
     pub origin: EditOrigin,
+    pub selection_before: Option<Utf16Selection>,
+    pub selection_after: Option<Utf16Selection>,
 }
 
 /// 一批编辑里的坐标都以「编辑前」的文档为基准，所以可以逐条独立换算。
@@ -110,7 +160,10 @@ pub fn apply_edits(
 
         let changes = to_char_changes(document, &args.changes);
         let inverses = build_inverses(document, &changes)?;
-        let selection_before = document.cursor.into_iter().collect::<Vec<_>>();
+        let selection_before = args
+            .selection_before
+            .map(|selection| selection_positions(document, selection))
+            .unwrap_or_default();
 
         document.apply_changes(&changes).map_err(map_edit_error)?;
 
@@ -122,11 +175,15 @@ pub fn apply_edits(
                     .char_to_line(change.from.min(document.rope.len_chars()))
             })
             .unwrap_or(0);
+        let selection_after = args
+            .selection_after
+            .map(|selection| selection_positions(document, selection))
+            .unwrap_or_default();
         document.undo.push(
             inverses,
             changes,
             selection_before,
-            document.cursor.into_iter().collect(),
+            selection_after,
             CoalesceKey {
                 kind: args.origin.into(),
                 line,
@@ -244,9 +301,11 @@ pub struct DocumentIdArgs {
 pub struct UndoResult {
     pub applied: bool,
     pub document_version: u64,
+    pub line_count: usize,
     pub dirty: bool,
     pub can_undo: bool,
     pub can_redo: bool,
+    pub selection: Option<Utf16Selection>,
 }
 
 #[tauri::command]
@@ -256,18 +315,24 @@ pub fn undo(args: DocumentIdArgs, state: tauri::State<'_, AppState>) -> AppResul
             return Ok(UndoResult {
                 applied: false,
                 document_version: document.document_version,
+                line_count: document.rope.len_lines(),
                 dirty: document.is_dirty(),
                 can_undo: false,
                 can_redo: document.undo.can_redo(),
+                selection: None,
             });
         };
         document.apply_changes(&step.undo).map_err(map_edit_error)?;
+        let selection = selection_from_positions(document, &step.selection_before)
+            .unwrap_or_else(|| fallback_selection(document, &step.undo, false));
         Ok(UndoResult {
             applied: true,
             document_version: document.document_version,
-            dirty: document.undo.is_dirty(),
+            line_count: document.rope.len_lines(),
+            dirty: document.is_dirty(),
             can_undo: document.undo.can_undo(),
             can_redo: document.undo.can_redo(),
+            selection: Some(selection),
         })
     })
 }
@@ -279,18 +344,24 @@ pub fn redo(args: DocumentIdArgs, state: tauri::State<'_, AppState>) -> AppResul
             return Ok(UndoResult {
                 applied: false,
                 document_version: document.document_version,
+                line_count: document.rope.len_lines(),
                 dirty: document.is_dirty(),
                 can_undo: document.undo.can_undo(),
                 can_redo: false,
+                selection: None,
             });
         };
         document.apply_changes(&step.redo).map_err(map_edit_error)?;
+        let selection = selection_from_positions(document, &step.selection_after)
+            .unwrap_or_else(|| fallback_selection(document, &step.redo, true));
         Ok(UndoResult {
             applied: true,
             document_version: document.document_version,
-            dirty: document.undo.is_dirty(),
+            line_count: document.rope.len_lines(),
+            dirty: document.is_dirty(),
             can_undo: document.undo.can_undo(),
             can_redo: document.undo.can_redo(),
+            selection: Some(selection),
         })
     })
 }
@@ -307,14 +378,7 @@ pub struct ResyncArgs {
 #[tauri::command]
 pub fn resync(args: ResyncArgs, state: tauri::State<'_, AppState>) -> AppResult<ApplyResult> {
     with_document(&state, &args.document_id, |document| {
-        let len = document.rope.len_chars();
-        document
-            .apply_changes(&[Change {
-                from: 0,
-                to: len,
-                insert: args.text,
-            }])
-            .map_err(map_edit_error)?;
+        resync_document(document, args.text)?;
         Ok(ApplyResult {
             document_version: document.document_version,
             dirty: document.is_dirty(),
@@ -322,6 +386,20 @@ pub fn resync(args: ResyncArgs, state: tauri::State<'_, AppState>) -> AppResult<
             line_count: document.rope.len_lines(),
         })
     })
+}
+
+fn resync_document(document: &mut Document, text: String) -> AppResult<()> {
+    let len = document.rope.len_chars();
+    document
+        .apply_changes(&[Change {
+            from: 0,
+            to: len,
+            insert: text,
+        }])
+        .map_err(map_edit_error)?;
+    // 全量重放与旧逆操作不再共享坐标基准；旧历史必须整体失效。
+    document.undo = crate::undo::UndoStack::new();
+    Ok(())
 }
 
 #[cfg(test)]
@@ -377,6 +455,29 @@ mod tests {
         })
         .expect("编辑");
         assert_eq!(text_of(&state), "😀Xb");
+    }
+
+    #[test]
+    fn undo_selection_uses_the_original_line_and_utf16_column() {
+        let mut document = Document::new("d1".into(), None, "first\n😀abc");
+        let before = Utf16Selection { anchor: 9, head: 9 };
+        let before_positions = selection_positions(&document, before);
+        document
+            .apply_changes(&[Change {
+                from: 8,
+                to: 8,
+                insert: "x".into(),
+            }])
+            .expect("输入");
+
+        assert_eq!(
+            selection_from_positions(&document, &before_positions)
+                .expect("恢复选区")
+                .head,
+            9,
+        );
+        assert_eq!(before_positions[1].line, 1);
+        assert_eq!(before_positions[1].column_utf16, 3);
     }
 
     #[test]
@@ -497,14 +598,26 @@ mod tests {
     fn resync_replaces_the_whole_text() {
         let state = state_with("old");
         with_document(&state, "d1", |document| {
-            let len = document.rope.len_chars();
-            document
-                .apply_changes(&[Change {
+            document.undo.push(
+                vec![Change {
                     from: 0,
-                    to: len,
-                    insert: "brand new".into(),
-                }])
-                .map_err(map_edit_error)?;
+                    to: 3,
+                    insert: "old".into(),
+                }],
+                vec![Change {
+                    from: 0,
+                    to: 3,
+                    insert: "new".into(),
+                }],
+                vec![],
+                vec![],
+                CoalesceKey {
+                    kind: EditKind::Other,
+                    line: 0,
+                },
+            );
+            resync_document(document, "brand new".into())?;
+            assert!(!document.undo.can_undo());
             Ok(())
         })
         .expect("resync");

@@ -5,11 +5,11 @@
  * 等待只发生在 flush 闸门上——保存 / 查找 / 替换 / 格式化 / 差异 / 大纲
  * 这些以 Rust 为准的操作之前。
  */
-import { EditorState, Transaction } from "@codemirror/state";
+import { Annotation, EditorState, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { useEffect, useRef, useState } from "react";
 import type { GutterMark } from "../ipc/diff";
-import type { DocumentMeta, Utf16Change } from "../ipc/documents";
+import type { ApplyResult, DocumentMeta, Utf16Change } from "../ipc/documents";
 import { applyEdits, resync } from "../ipc/documents";
 import { EditSyncQueue, type SyncStatus } from "../ipc/editSync";
 import {
@@ -21,6 +21,7 @@ import {
 } from "../ipc/flushGate";
 import type { ReplaceEdit } from "../ipc/search";
 import { clampLine } from "../lib/goToLine";
+import { documentDelta } from "../lib/documentDelta";
 import { logger } from "../lib/logger";
 import type { MarkdownEdit } from "../lib/markdownTransform";
 import { applyBookmarkLines } from "./bookmarkGutter";
@@ -58,6 +59,8 @@ export interface EditorStatus {
   selectionChars: number;
 }
 
+const authoritativeTextChange = Annotation.define<boolean>();
+
 /**
  * `[startLine, endLine)` 的字符偏移，行号 0 基。
  *
@@ -86,6 +89,12 @@ export interface EditorHandle {
   flush: () => Promise<void>;
   getText: () => string;
   setText: (text: string) => void;
+  /** Rust 已完成撤销/重做；只更新视图和同步版本，不生成新编辑。 */
+  applyAuthoritativeText: (
+    text: string,
+    selection: { anchor: number; head: number } | null,
+    version: number,
+  ) => void;
   /** 主选区的 head，UTF-16 偏移。查找的「从光标处步进」以它为准 */
   getCursor: () => number;
   /** 主选区范围；`from === to` 表示没有选中内容 */
@@ -155,6 +164,7 @@ interface UseEditorViewOptions {
   /** 来自 `config.json`（SPEC §9.2）。变化时只重配 compartment，不重建视图 */
   appearance: Appearance;
   onSyncStatusChange?: (status: SyncStatus) => void;
+  onDocumentChange?: (result: ApplyResult) => void;
   /** 每次正文变化都会调用，供备份调度判断「用户还在敲」（SPEC F1.6 步骤 1） */
   onEdited?: () => void;
   /** 双击行号切换书签（SPEC F7）。传 0 基行号 */
@@ -189,6 +199,7 @@ export function useEditorView({
   initialFoldedLines,
   appearance,
   onSyncStatusChange,
+  onDocumentChange,
   onEdited,
   onToggleBookmark,
   onCursorChange,
@@ -202,6 +213,13 @@ export function useEditorView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const queueRef = useRef<EditSyncQueue | null>(null);
+  const initialTextRef = useRef(initialText);
+  const lastPropTextRef = useRef(initialText);
+  const previousViewTextRef = useRef<string | null>(null);
+  const metaVersionRef = useRef(meta.documentVersion);
+  useEffect(() => {
+    metaVersionRef.current = meta.documentVersion;
+  }, [meta.documentVersion]);
   const [, setStatus] = useState<SyncStatus>("idle");
 
   // 建视图时读到的外观值。放进 ref 是为了让外观变化只走下面那个
@@ -254,6 +272,11 @@ export function useEditorView({
     syncStatusChangeRef.current = onSyncStatusChange;
   }, [onSyncStatusChange]);
 
+  const documentChangeRef = useRef(onDocumentChange);
+  useEffect(() => {
+    documentChangeRef.current = onDocumentChange;
+  }, [onDocumentChange]);
+
   const editedRef = useRef(onEdited);
   useEffect(() => {
     editedRef.current = onEdited;
@@ -282,6 +305,7 @@ export function useEditorView({
 
     const queue = new EditSyncQueue({
       docId: meta.documentId,
+      initialVersion: metaVersionRef.current,
       readText,
       onStatusChange: (next) => {
         setStatus(next);
@@ -296,7 +320,10 @@ export function useEditorView({
               batch.baseVersion,
               batch.changes,
               batch.origin,
+              batch.selectionBefore,
+              batch.selectionAfter,
             );
+            documentChangeRef.current?.(result);
             return { ok: true, serverVersion: result.documentVersion };
           } catch {
             // 无论是版本失配还是断档，唯一正确的出路都是全量重放，
@@ -310,6 +337,7 @@ export function useEditorView({
         },
         resync: async (docId, text) => {
           const result = await resync(docId, text);
+          documentChangeRef.current?.(result);
           return result.documentVersion;
         },
       },
@@ -356,6 +384,7 @@ export function useEditorView({
 
     const syncListener = EditorView.updateListener.of((update) => {
       if (!update.docChanged) return;
+      if (update.transactions.some((transaction) => transaction.annotation(authoritativeTextChange))) return;
       const changes: Utf16Change[] = [];
       update.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
         changes.push({ from: fromA, to: toA, insert: inserted.toString() });
@@ -366,12 +395,19 @@ export function useEditorView({
       const userEvent = update.transactions
         .map((transaction) => transaction.annotation(Transaction.userEvent))
         .find((event): event is string => typeof event === "string");
-      queue.push(update.changes, inferOrigin({ userEvent, changes }));
+      const before = update.startState.selection.main;
+      const after = update.state.selection.main;
+      queue.push(
+        update.changes,
+        inferOrigin({ userEvent, changes }),
+        { anchor: before.anchor, head: before.head },
+        { anchor: after.anchor, head: after.head },
+      );
     });
 
     const view = new EditorView({
       state: EditorState.create({
-        doc: initialText,
+        doc: previousViewTextRef.current ?? initialTextRef.current,
         extensions: [
           ...extensionsFor({
             mode: meta.mode,
@@ -449,6 +485,21 @@ export function useEditorView({
     };
     setEditSyncStatus(flush, queue.getStatus());
 
+    const applyAuthoritativeText: EditorHandle["applyAuthoritativeText"] = (text, selection, version) => {
+      queue.acceptExternalVersion(version);
+      const change = documentDelta(view.state.doc.toString(), text);
+      const limit = text.length;
+      const current = view.state.selection.main;
+      const anchor = Math.min(selection?.anchor ?? current.anchor, limit);
+      const head = Math.min(selection?.head ?? current.head, limit);
+      view.dispatch({
+        changes: change ?? undefined,
+        selection: { anchor, head },
+        annotations: authoritativeTextChange.of(true),
+        effects: EditorView.scrollIntoView(head, { y: "nearest" }),
+      });
+    };
+
     handleRef.current = {
       flush,
       getText: readText,
@@ -456,6 +507,7 @@ export function useEditorView({
         view.dispatch({
           changes: { from: 0, to: view.state.doc.length, insert: text },
         }),
+      applyAuthoritativeText,
       getCursor: () => view.state.selection.main.head,
       getSelection: () => {
         const { from, to } = view.state.selection.main;
@@ -581,6 +633,7 @@ export function useEditorView({
     setEditFlush(flush);
 
     return () => {
+      previousViewTextRef.current = view.state.doc.toString();
       if (compositionEndFrame !== null) cancelAnimationFrame(compositionEndFrame);
       viewportAnchorChangeRef.current?.(viewportAnchor());
       foldedLinesChangeRef.current?.(foldedLines(view.state));
@@ -595,7 +648,18 @@ export function useEditorView({
       viewRef.current = null;
       queueRef.current = null;
     };
-  }, [meta.documentId, meta.mode, meta.readOnly, initialText, handleRef]);
+  }, [meta.documentId, meta.mode, meta.readOnly, handleRef]);
+
+  useEffect(() => {
+    // 重新从磁盘装载时，外层会更新初始正文；已有视图需要与新的 Rust 版本对齐。
+    // 撤销/重做已先同步视图，这里相同正文会直接跳过。
+    if (lastPropTextRef.current === initialText) return;
+    lastPropTextRef.current = initialText;
+    const view = viewRef.current;
+    if (view && view.state.doc.toString() !== initialText) {
+      handleRef.current?.applyAuthoritativeText(initialText, null, meta.documentVersion);
+    }
+  }, [initialText, handleRef, meta.documentVersion]);
 
   useEffect(() => {
     // 这个 effect 声明在建视图之后，所以挂载时 ref 里已经是本次渲染的值；

@@ -186,6 +186,7 @@ pub fn run() {
             commands::file_io::list_encodings,
             commands::pinyin::command_pinyin_initials,
             commands::workspace::list_directory,
+            commands::workspace::create_workspace_entry,
             commands::workspace::rename_workspace_entry,
             commands::workspace::move_workspace_entry_to_trash,
             commands::workspace::permanently_delete_workspace_entry,

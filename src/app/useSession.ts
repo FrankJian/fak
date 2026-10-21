@@ -35,6 +35,8 @@ export interface SessionState {
   dismissMissing: () => void;
   /** 关窗口前调用。返回 Promise 以便调用方等它落盘 */
   persist: () => Promise<void>;
+  /** 用户明确清空标签时，停止尚未完成的异步恢复，避免旧会话重新打开已关闭文件。 */
+  cancelPendingRestore: () => void;
 }
 
 export function useSession({
@@ -50,6 +52,7 @@ export function useSession({
   // 恢复只能跑一次。配置 hydrate 会让本组件重渲染，没有这道闸
   // 就会把上次会话里的文件重复打开一遍
   const restored = useRef(false);
+  const restoreCancelled = useRef(false);
 
   const latest = useRef({
     workspace,
@@ -79,9 +82,26 @@ export function useSession({
 
     void restoreSession()
       .then(async (session) => {
+        const closeRestoredDocuments = async () => {
+          for (const item of session.documents) {
+            await latest.current.workspace.close(item.meta.documentId);
+          }
+        };
+        if (restoreCancelled.current) {
+          await closeRestoredDocuments();
+          return;
+        }
         let restoredActiveId: string | null = null;
         for (const item of session.documents) {
+          if (restoreCancelled.current) {
+            await closeRestoredDocuments();
+            return;
+          }
           await latest.current.workspace.adopt(item.meta);
+          if (restoreCancelled.current) {
+            await closeRestoredDocuments();
+            return;
+          }
           useDocumentStore.getState().setViewportAnchor(item.meta.documentId, {
             line: item.line,
             topLine: item.topLine,
@@ -96,6 +116,10 @@ export function useSession({
         }
         if (restoredActiveId)
           useDocumentStore.getState().activate(restoredActiveId);
+        if (restoreCancelled.current) {
+          await closeRestoredDocuments();
+          return;
+        }
         await latest.current.restoreViewState(session.view);
         setMissing(session.missing);
       })
@@ -104,6 +128,10 @@ export function useSession({
         logger.warn("session restore failed", error);
       });
   }, [hydrated, restoreLastSession]);
+
+  const cancelPendingRestore = useCallback(() => {
+    restoreCancelled.current = true;
+  }, []);
 
   const persist = useCallback(async () => {
     if (!isTauriAvailable()) return;
@@ -142,5 +170,10 @@ export function useSession({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [persist]);
 
-  return { missing, dismissMissing: () => setMissing(0), persist };
+  return {
+    missing,
+    dismissMissing: () => setMissing(0),
+    persist,
+    cancelPendingRestore,
+  };
 }

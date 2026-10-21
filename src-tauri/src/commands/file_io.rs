@@ -540,7 +540,6 @@ pub async fn reload_from_disk(
 
     with_document(&state, &args.document_id, |document| {
         document.reopen_with_encoding(&bytes, encoding);
-        document.undo = crate::undo::UndoStack::new();
         document.fingerprint = Some(FileFingerprint::read(&path)?);
         Ok(DocumentMeta::of(document))
     })

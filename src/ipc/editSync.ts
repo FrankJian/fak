@@ -31,6 +31,13 @@ export interface EditBatch {
   seq: number;
   changes: Change[];
   origin: BatchOrigin;
+  selectionBefore?: TextSelection;
+  selectionAfter?: TextSelection;
+}
+
+export interface TextSelection {
+  anchor: number;
+  head: number;
 }
 
 export type RejectReason = 'version_mismatch' | 'gap' | 'out_of_range';
@@ -51,6 +58,7 @@ export interface EditSyncTransport {
 
 export interface EditSyncOptions {
   docId: string;
+  initialVersion?: number;
   transport: EditSyncTransport;
   /** 取前端当前全文，仅在 resync 时调用。 */
   readText: () => string;
@@ -63,8 +71,10 @@ export const COALESCE_WINDOW_MS = 16;
 export class EditSyncQueue {
   private pending: ChangeSet | null = null;
   private pendingOrigin: BatchOrigin | null = null;
+  private pendingSelectionBefore: TextSelection | undefined;
+  private pendingSelectionAfter: TextSelection | undefined;
   private seq = 0;
-  private version = 0;
+  private version: number;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private inFlight: Promise<void> | null = null;
   private composing = false;
@@ -72,7 +82,9 @@ export class EditSyncQueue {
   private status: SyncStatus = 'idle';
   private disposed = false;
 
-  constructor(private readonly options: EditSyncOptions) {}
+  constructor(private readonly options: EditSyncOptions) {
+    this.version = options.initialVersion ?? 0;
+  }
 
   getStatus(): SyncStatus {
     return this.status;
@@ -82,9 +94,23 @@ export class EditSyncQueue {
     return this.version;
   }
 
+  /** 撤销、重做或磁盘重载已经在 Rust 上提交；后续本地增量以该版本为基准。 */
+  acceptExternalVersion(version: number): void {
+    if (this.pending !== null || this.inFlight !== null)
+      throw new Error('Cannot replace edit version while synchronization is pending');
+    this.version = version;
+  }
+
   /** 本地已应用的编辑推入队列；调用方不等待。 */
-  push(changes: ChangeSet, origin: BatchOrigin = 'other'): void {
+  push(
+    changes: ChangeSet,
+    origin: BatchOrigin = 'other',
+    selectionBefore?: TextSelection,
+    selectionAfter?: TextSelection,
+  ): void {
     if (this.disposed || changes.empty) return;
+    if (this.pending === null) this.pendingSelectionBefore = selectionBefore;
+    this.pendingSelectionAfter = selectionAfter;
     // 后续事务的坐标基于前一事务的新正文；Rust 要求整批都基于同一份旧正文。
     this.pending = this.pending ? this.pending.compose(changes) : changes;
     // 一批里混了不同类型时退到 other：宁可让撤销多分一步，
@@ -142,6 +168,8 @@ export class EditSyncQueue {
       this.timer = null;
     }
     this.pending = null;
+    this.pendingSelectionBefore = undefined;
+    this.pendingSelectionAfter = undefined;
     for (const resolve of this.compositionWaiters.splice(0)) resolve();
   }
 
@@ -166,6 +194,8 @@ export class EditSyncQueue {
     if (changes.length === 0) {
       this.pending = null;
       this.pendingOrigin = null;
+      this.pendingSelectionBefore = undefined;
+      this.pendingSelectionAfter = undefined;
       this.setStatus('idle');
       return;
     }
@@ -176,9 +206,13 @@ export class EditSyncQueue {
       seq: ++this.seq,
       changes,
       origin: this.pendingOrigin ?? 'other',
+      selectionBefore: this.pendingSelectionBefore,
+      selectionAfter: this.pendingSelectionAfter,
     };
     this.pending = null;
     this.pendingOrigin = null;
+    this.pendingSelectionBefore = undefined;
+    this.pendingSelectionAfter = undefined;
 
     this.inFlight = (async () => {
       const result = await this.options.transport.apply(batch);
@@ -192,6 +226,9 @@ export class EditSyncQueue {
       const text = this.options.readText();
       this.version = await this.options.transport.resync(this.options.docId, text, batch.seq);
       this.pending = null;
+      this.pendingOrigin = null;
+      this.pendingSelectionBefore = undefined;
+      this.pendingSelectionAfter = undefined;
       this.setStatus('idle');
     })();
 

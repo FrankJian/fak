@@ -11,12 +11,16 @@ interface FileTreeContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
+  onCreateFile: () => void;
+  onCreateFolder: () => void;
   onRename: () => void;
   onDelete: () => void;
   onCopyPath: () => void;
   onCopyRelativePath: () => void;
   onReveal: () => void;
+  onRemoveRoot: () => void;
   canModify: boolean;
+  isRoot: boolean;
 }
 
 export function FileTreeContextMenu({
@@ -24,12 +28,16 @@ export function FileTreeContextMenu({
   x,
   y,
   onClose,
+  onCreateFile,
+  onCreateFolder,
   onRename,
   onDelete,
   onCopyPath,
   onCopyRelativePath,
   onReveal,
+  onRemoveRoot,
   canModify,
+  isRoot,
 }: FileTreeContextMenuProps) {
   const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -112,6 +120,20 @@ export function FileTreeContextMenu({
       onKeyDown={moveFocus}
     >
       <MenuItem
+        icon="newFile"
+        label={t("fileTree.newFile")}
+        onSelect={() => select(onCreateFile)}
+      />
+      <MenuItem
+        icon="newFolder"
+        label={t("fileTree.newFolder")}
+        onSelect={() => select(onCreateFolder)}
+      />
+      <div
+        role="separator"
+        className="mx-[var(--space-2)] my-[var(--space-1)] border-t border-[var(--border-subtle)]"
+      />
+      <MenuItem
         icon="revealInFolder"
         label={t("fileTree.reveal")}
         onSelect={() => select(onReveal)}
@@ -126,6 +148,19 @@ export function FileTreeContextMenu({
         label={t("fileTree.copyRelativePath")}
         onSelect={() => select(onCopyRelativePath)}
       />
+      {isRoot && (
+        <>
+          <div
+            role="separator"
+            className="mx-[var(--space-2)] my-[var(--space-1)] border-t border-[var(--border-subtle)]"
+          />
+          <MenuItem
+            icon="remove"
+            label={t("fileTree.removeRoot")}
+            onSelect={() => select(onRemoveRoot)}
+          />
+        </>
+      )}
       {canModify && (
         <>
           <div
@@ -147,6 +182,63 @@ export function FileTreeContextMenu({
       )}
       <span className="sr-only">{node.name}</span>
     </div>
+  );
+}
+
+interface FileTreeCreateDialogProps {
+  directory: FileTreeNode | null;
+  kind: "file" | "directory";
+  working: boolean;
+  onConfirm: (name: string) => void;
+  onCancel: () => void;
+}
+
+export function FileTreeCreateDialog({
+  directory,
+  kind,
+  working,
+  onConfirm,
+  onCancel,
+}: FileTreeCreateDialogProps) {
+  const { t } = useTranslation();
+  const [name, setName] = useState("");
+  const isDirectory = kind === "directory";
+  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (name.trim()) onConfirm(name);
+  };
+
+  return (
+    <Modal
+      open={directory !== null}
+      title={t(isDirectory ? "fileTree.newFolderTitle" : "fileTree.newFileTitle")}
+      onClose={onCancel}
+      closeOnScrimClick={!working}
+      footer={
+        <>
+          <Button variant="quiet" disabled={working} onClick={onCancel}>
+            {t("dialog.cancel")}
+          </Button>
+          <Button form="file-tree-create-entry" variant="strong" disabled={working || !name.trim()} type="submit">
+            {t("fileTree.create")}
+          </Button>
+        </>
+      }
+    >
+      <form id="file-tree-create-entry" onSubmit={submit}>
+        <label className="flex flex-col gap-[var(--space-2)] text-[var(--text-primary)]" style={{ fontSize: "var(--font-size-ui)" }}>
+          <span>{t("fileTree.nameLabel")}</span>
+          <input
+            autoFocus
+            value={name}
+            disabled={working}
+            placeholder={t(isDirectory ? "fileTree.folderNamePlaceholder" : "fileTree.fileNamePlaceholder")}
+            onChange={(event) => setName(event.target.value)}
+            className="h-[var(--h-input)] rounded-[var(--radius-control)] border border-[var(--border-default)] bg-[var(--bg-inset)] px-[var(--space-2)] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent-border)]"
+          />
+        </label>
+      </form>
+    </Modal>
   );
 }
 

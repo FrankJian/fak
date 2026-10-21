@@ -37,6 +37,11 @@ pub enum Theme {
     Light,
     Dark,
     HighContrast,
+    SolarizedLight,
+    ForestDark,
+    Midnight,
+    HighContrastCyan,
+    HighContrastLime,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -577,6 +582,21 @@ mod tests {
         assert_eq!(parsed.config.font_size, Config::default().font_size);
         assert_eq!(parsed.config.theme, Theme::Dark);
         assert_eq!(parsed.problems, vec!["fontSize"]);
+    }
+
+    #[test]
+    fn preset_theme_variants_are_read_from_config() {
+        for (raw_theme, expected) in [
+            ("solarizedLight", Theme::SolarizedLight),
+            ("forestDark", Theme::ForestDark),
+            ("midnight", Theme::Midnight),
+            ("highContrastCyan", Theme::HighContrastCyan),
+            ("highContrastLime", Theme::HighContrastLime),
+        ] {
+            let parsed = from_map(&map_of(&format!(r#"{{ "theme": "{raw_theme}" }}"#)));
+            assert_eq!(parsed.config.theme, expected);
+            assert!(parsed.problems.is_empty());
+        }
     }
 
     #[test]

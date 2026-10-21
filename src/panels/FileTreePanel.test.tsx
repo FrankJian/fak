@@ -17,11 +17,13 @@ describe("FileTreePanel resize", () => {
         onRefresh={vi.fn()}
         onCollapseAll={vi.fn()}
         onRename={vi.fn()}
+        onCreate={vi.fn()}
         onMoveToTrash={vi.fn()}
         onPermanentlyDelete={vi.fn()}
         onCopyText={vi.fn()}
         onReveal={vi.fn()}
         onError={vi.fn()}
+        onRemoveRoot={vi.fn()}
         onClose={vi.fn()}
       />,
     );

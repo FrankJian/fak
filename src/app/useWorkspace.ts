@@ -93,6 +93,7 @@ export function useWorkspace(): WorkspaceState {
   const [problem, setProblem] = useState<ErrorPresentation | null>(null);
   const [saveConflict, setSaveConflict] = useState<DocumentMeta | null>(null);
   const handleRef = useRef<EditorHandle | null>(null);
+  const historyChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const activeTab =
     tabs.find((tab) => tab.meta.documentId === activeId) ?? null;
@@ -351,51 +352,38 @@ export function useWorkspace(): WorkspaceState {
       }
     }, [report, saveConflict]);
 
-  const undo = useCallback(async () => {
-    if (!activeMeta) return;
-    try {
-      // Rust 持有唯一撤销栈；先把 16 ms 合并窗口里的本地编辑送达，
-      // 否则紧接工具栏编辑按 Ctrl+Z 时后端还看不到可撤销步骤。
-      await handleRef.current?.flush();
-      const result = await undoDocument(activeMeta.documentId);
-      if (!result.applied) return;
-      // 撤销以 Rust 的结果为准，前端整篇重置——CM6 自己的 history
-      // 与 Rust 撤销栈是两套状态，让它们各撤各的必然分叉
-      const meta = {
-        ...activeMeta,
-        documentVersion: result.documentVersion,
-        dirty: result.dirty,
-      };
-      updateMeta(meta);
-      storeText(
-        meta.documentId,
-        await readAllText(meta.documentId, meta.lineCount),
-      );
-    } catch (error) {
-      report(error);
-    }
+  const historyAction = useCallback((direction: "undo" | "redo"): Promise<void> => {
+    if (!activeMeta) return Promise.resolve();
+    const documentId = activeMeta.documentId;
+    const run = async () => {
+      try {
+        // 连续按快捷键时，前一次的正文与版本必须先同步回编辑器。
+        await handleRef.current?.flush();
+        const result = await (direction === "undo" ? undoDocument(documentId) : redoDocument(documentId));
+        if (!result.applied) return;
+        const text = await readAllText(documentId, result.lineCount ?? activeMeta.lineCount);
+        if (useDocumentStore.getState().activeId === documentId) {
+          handleRef.current?.applyAuthoritativeText(text, result.selection ?? null, result.documentVersion);
+          storeText(documentId, text);
+        }
+        const currentMeta = useDocumentStore.getState().tabs.find((tab) => tab.meta.documentId === documentId)?.meta;
+        if (currentMeta) updateMeta({
+          ...currentMeta,
+          documentVersion: result.documentVersion,
+          lineCount: result.lineCount ?? currentMeta.lineCount,
+          dirty: result.dirty,
+        });
+      } catch (error) {
+        report(error);
+      }
+    };
+    const next = historyChainRef.current.then(run, run);
+    historyChainRef.current = next;
+    return next;
   }, [activeMeta, report, storeText, updateMeta]);
 
-  const redo = useCallback(async () => {
-    if (!activeMeta) return;
-    try {
-      await handleRef.current?.flush();
-      const result = await redoDocument(activeMeta.documentId);
-      if (!result.applied) return;
-      const meta = {
-        ...activeMeta,
-        documentVersion: result.documentVersion,
-        dirty: result.dirty,
-      };
-      updateMeta(meta);
-      storeText(
-        meta.documentId,
-        await readAllText(meta.documentId, meta.lineCount),
-      );
-    } catch (error) {
-      report(error);
-    }
-  }, [activeMeta, report, storeText, updateMeta]);
+  const undo = useCallback(() => historyAction("undo"), [historyAction]);
+  const redo = useCallback(() => historyAction("redo"), [historyAction]);
 
   const convert = useCallback(
     async (encoding: string) => {

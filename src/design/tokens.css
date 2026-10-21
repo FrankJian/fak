@@ -235,7 +235,9 @@
 }
 
 /* 高对比度：层次靠边框而非背景明度差（SPEC §6.11） */
-:root[data-theme="highContrast"] {
+:root[data-theme="highContrast"],
+:root[data-theme="highContrastCyan"],
+:root[data-theme="highContrastLime"] {
   --bg-base: #000000;
   --bg-surface: #000000;
   --bg-inset: #000000;
@@ -305,4 +307,227 @@
   --scrollbar-track: #1a1a1a;
 
   --focus-ring-width: 2px;
+}
+
+/* 太阳黄浅色：低饱和纸张底色，适合长时间阅读与 Markdown 预览。 */
+:root[data-theme="solarizedLight"] {
+  --bg-base: #fdf6e3;
+  --bg-surface: #f5eed9;
+  --bg-inset: #fffaf0;
+  --bg-raised: #fffdf7;
+  --bg-hover: #eee5cc;
+  --bg-active: #e4d8b9;
+  --border-subtle: #eee4cd;
+  --border-default: #dbcfae;
+  --border-strong: #c4b48d;
+  --text-primary: #39414a;
+  --text-secondary: #66717a;
+  --text-tertiary: #8b928e;
+  --text-disabled: #abb0a8;
+  --accent: #9a7012;
+  --accent-muted: rgba(154, 112, 18, 0.14);
+  --accent-border: rgba(154, 112, 18, 0.42);
+  --success: #407560;
+  --warning: #9a7012;
+  --danger: #a9534b;
+  --info: #596d79;
+  --selection-bg: rgba(89, 109, 121, 0.2);
+  --current-line-bg: rgba(57, 65, 74, 0.04);
+  --diff-insert-bg: rgba(64, 117, 96, 0.16);
+  --diff-delete-bg: rgba(169, 83, 75, 0.15);
+  --diff-modify-bg: rgba(154, 112, 18, 0.16);
+  --diff-inline-bg: rgba(154, 112, 18, 0.3);
+  --diff-insert-gutter: #407560;
+  --diff-delete-gutter: #a9534b;
+  --diff-modify-gutter: #9a7012;
+  --match-current-bg: var(--accent-muted);
+  --match-other-bg: rgba(154, 112, 18, 0.1);
+  --match-refine-bg: rgba(89, 109, 121, 0.16);
+  --filter-rule-1: #9a7012;
+  --filter-rule-2: #407560;
+  --filter-rule-3: #a9534b;
+  --filter-rule-4: #496d82;
+  --filter-rule-5: #81618b;
+  --filter-rule-6: #66717a;
+  --syntax-keyword: #81618b;
+  --syntax-string: #407560;
+  --syntax-number: #a25e32;
+  --syntax-comment: #8b928e;
+  --syntax-type: #496d82;
+  --bracket-level-1: var(--syntax-type);
+  --bracket-level-2: var(--syntax-string);
+  --bracket-level-3: var(--syntax-number);
+  --bracket-level-4: var(--syntax-keyword);
+  --scrollbar-thumb: rgba(102, 113, 122, 0.32);
+  --scrollbar-thumb-hover: rgba(102, 113, 122, 0.48);
+  --scrollbar-track: rgba(102, 113, 122, 0.08);
+}
+
+/* 松林深色：深绿灰底，强调信息保持温暖而克制。 */
+:root[data-theme="forestDark"] {
+  --bg-base: #101714;
+  --bg-surface: #16201b;
+  --bg-inset: #0c120f;
+  --bg-raised: #1b2821;
+  --bg-hover: #24342b;
+  --bg-active: #2c4034;
+  --border-subtle: #25362c;
+  --border-default: #354b3d;
+  --border-strong: #506854;
+  --text-primary: #e2e9e2;
+  --text-secondary: #aab8ad;
+  --text-tertiary: #79897e;
+  --text-disabled: #536158;
+  --accent: #d2af66;
+  --accent-muted: rgba(210, 175, 102, 0.17);
+  --accent-border: rgba(210, 175, 102, 0.46);
+  --success: #83bd90;
+  --warning: #d2af66;
+  --danger: #d17b70;
+  --info: #9ba9a1;
+  --selection-bg: rgba(132, 172, 145, 0.26);
+  --current-line-bg: rgba(255, 255, 255, 0.04);
+  --diff-insert-bg: rgba(131, 189, 144, 0.17);
+  --diff-delete-bg: rgba(209, 123, 112, 0.16);
+  --diff-modify-bg: rgba(210, 175, 102, 0.17);
+  --diff-inline-bg: rgba(210, 175, 102, 0.31);
+  --diff-insert-gutter: #83bd90;
+  --diff-delete-gutter: #d17b70;
+  --diff-modify-gutter: #d2af66;
+  --match-current-bg: var(--accent-muted);
+  --match-other-bg: rgba(210, 175, 102, 0.11);
+  --match-refine-bg: rgba(155, 169, 161, 0.18);
+  --filter-rule-1: #d2af66;
+  --filter-rule-2: #83bd90;
+  --filter-rule-3: #d17b70;
+  --filter-rule-4: #8bb4a5;
+  --filter-rule-5: #c19ab9;
+  --filter-rule-6: #aab8ad;
+  --syntax-keyword: #c19ab9;
+  --syntax-string: #83bd90;
+  --syntax-number: #d6a96c;
+  --syntax-comment: #79897e;
+  --syntax-type: #8bb4a5;
+  --bracket-level-1: var(--syntax-type);
+  --bracket-level-2: var(--syntax-string);
+  --bracket-level-3: var(--syntax-number);
+  --bracket-level-4: var(--syntax-keyword);
+  --scrollbar-thumb: rgba(170, 184, 173, 0.3);
+  --scrollbar-thumb-hover: rgba(170, 184, 173, 0.45);
+  --scrollbar-track: rgba(170, 184, 173, 0.07);
+}
+
+/* 午夜：中性深灰与青绿语法色，减少暖色在夜间的视觉负担。 */
+:root[data-theme="midnight"] {
+  --bg-base: #15191d;
+  --bg-surface: #1b2025;
+  --bg-inset: #101317;
+  --bg-raised: #232a30;
+  --bg-hover: #2b343b;
+  --bg-active: #354048;
+  --border-subtle: #2c363d;
+  --border-default: #3a4750;
+  --border-strong: #56636c;
+  --text-primary: #e7ebed;
+  --text-secondary: #b0bac0;
+  --text-tertiary: #7f8b93;
+  --text-disabled: #58646b;
+  --accent: #d2aa61;
+  --accent-muted: rgba(210, 170, 97, 0.17);
+  --accent-border: rgba(210, 170, 97, 0.46);
+  --success: #7fc4aa;
+  --warning: #d2aa61;
+  --danger: #da8075;
+  --info: #a9b6bc;
+  --selection-bg: rgba(122, 182, 183, 0.25);
+  --current-line-bg: rgba(255, 255, 255, 0.04);
+  --diff-insert-bg: rgba(127, 196, 170, 0.16);
+  --diff-delete-bg: rgba(218, 128, 117, 0.16);
+  --diff-modify-bg: rgba(210, 170, 97, 0.17);
+  --diff-inline-bg: rgba(210, 170, 97, 0.32);
+  --diff-insert-gutter: #7fc4aa;
+  --diff-delete-gutter: #da8075;
+  --diff-modify-gutter: #d2aa61;
+  --match-current-bg: var(--accent-muted);
+  --match-other-bg: rgba(210, 170, 97, 0.11);
+  --match-refine-bg: rgba(169, 182, 188, 0.19);
+  --filter-rule-1: #d2aa61;
+  --filter-rule-2: #7fc4aa;
+  --filter-rule-3: #da8075;
+  --filter-rule-4: #7cc7c8;
+  --filter-rule-5: #c3a2cb;
+  --filter-rule-6: #b0bac0;
+  --syntax-keyword: #c3a2cb;
+  --syntax-string: #7fc4aa;
+  --syntax-number: #d69b67;
+  --syntax-comment: #7f8b93;
+  --syntax-type: #7cc7c8;
+  --bracket-level-1: var(--syntax-type);
+  --bracket-level-2: var(--syntax-string);
+  --bracket-level-3: var(--syntax-number);
+  --bracket-level-4: var(--syntax-keyword);
+  --scrollbar-thumb: rgba(176, 186, 192, 0.3);
+  --scrollbar-thumb-hover: rgba(176, 186, 192, 0.46);
+  --scrollbar-track: rgba(176, 186, 192, 0.07);
+}
+
+/* 两套辅助色明确不同的高对比度方案，方便不同色觉与环境光下选择。 */
+:root[data-theme="highContrastCyan"] {
+  --accent: #63e6eb;
+  --accent-muted: #093d40;
+  --accent-border: #63e6eb;
+  --success: #9cf59c;
+  --warning: #ffe089;
+  --danger: #ff9b92;
+  --selection-bg: #174f54;
+  --diff-insert-bg: #123d1c;
+  --diff-delete-bg: #431614;
+  --diff-modify-bg: #174a4e;
+  --diff-inline-bg: #21686d;
+  --diff-insert-gutter: #9cf59c;
+  --diff-delete-gutter: #ff9b92;
+  --diff-modify-gutter: #63e6eb;
+  --match-current-bg: #174f54;
+  --match-other-bg: #103d40;
+  --match-refine-bg: #243b4d;
+  --filter-rule-1: #63e6eb;
+  --filter-rule-2: #9cf59c;
+  --filter-rule-3: #ff9b92;
+  --filter-rule-4: #a9d8ff;
+  --filter-rule-5: #f1c4ff;
+  --syntax-keyword: #f1c4ff;
+  --syntax-string: #9cf59c;
+  --syntax-number: #ffe089;
+  --syntax-comment: #d1dde0;
+  --syntax-type: #a9d8ff;
+}
+
+:root[data-theme="highContrastLime"] {
+  --accent: #dbff71;
+  --accent-muted: #35410f;
+  --accent-border: #dbff71;
+  --success: #b9f7a0;
+  --warning: #ffe089;
+  --danger: #ff9b92;
+  --selection-bg: #48551c;
+  --diff-insert-bg: #1e4317;
+  --diff-delete-bg: #431614;
+  --diff-modify-bg: #404b12;
+  --diff-inline-bg: #687c1c;
+  --diff-insert-gutter: #b9f7a0;
+  --diff-delete-gutter: #ff9b92;
+  --diff-modify-gutter: #dbff71;
+  --match-current-bg: #48551c;
+  --match-other-bg: #374212;
+  --match-refine-bg: #343d24;
+  --filter-rule-1: #dbff71;
+  --filter-rule-2: #b9f7a0;
+  --filter-rule-3: #ff9b92;
+  --filter-rule-4: #b2e7ff;
+  --filter-rule-5: #f1c4ff;
+  --syntax-keyword: #f1c4ff;
+  --syntax-string: #b9f7a0;
+  --syntax-number: #ffe089;
+  --syntax-comment: #d9dfcb;
+  --syntax-type: #b2e7ff;
 }

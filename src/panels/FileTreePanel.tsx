@@ -5,7 +5,11 @@ import { useTranslation } from "../i18n/useTranslation";
 import { rowWindow } from "../lib/virtualList";
 import { useAppStore } from "../store/appStore";
 import type { FileTreeNode } from "./useFileTree";
-import { FileTreeContextMenu, FileTreeDeleteDialog } from "./FileTreeActions";
+import {
+  FileTreeContextMenu,
+  FileTreeCreateDialog,
+  FileTreeDeleteDialog,
+} from "./FileTreeActions";
 import { FileTreeRow } from "./FileTreeRow";
 
 const MIN_WIDTH = 160;
@@ -37,11 +41,17 @@ export interface FileTreePanelProps {
   onRefresh: () => void;
   onCollapseAll: () => void;
   onRename: (path: string, name: string) => Promise<void>;
+  onCreate: (
+    directory: string,
+    name: string,
+    kind: FileTreeNode["kind"],
+  ) => Promise<void>;
   onMoveToTrash: (path: string) => Promise<"moved" | "unavailable">;
   onPermanentlyDelete: (path: string) => Promise<void>;
   onCopyText: (text: string) => void;
   onReveal: (path: string) => void;
   onError: (error: unknown) => void;
+  onRemoveRoot: () => void;
   onClose: () => void;
 }
 
@@ -55,11 +65,13 @@ export function FileTreePanel({
   onRefresh,
   onCollapseAll,
   onRename,
+  onCreate,
   onMoveToTrash,
   onPermanentlyDelete,
   onCopyText,
   onReveal,
   onError,
+  onRemoveRoot,
   onClose,
 }: FileTreePanelProps) {
   const { t } = useTranslation();
@@ -78,6 +90,8 @@ export function FileTreePanel({
   } | null>(null);
   const [renamePath, setRenamePath] = useState<string | null>(null);
   const [renameName, setRenameName] = useState("");
+  const [createTarget, setCreateTarget] = useState<FileTreeNode | null>(null);
+  const [createKind, setCreateKind] = useState<"file" | "directory">("file");
   const [deleteNode, setDeleteNode] = useState<FileTreeNode | null>(null);
   const [permanentDeleteNode, setPermanentDeleteNode] =
     useState<FileTreeNode | null>(null);
@@ -161,6 +175,32 @@ export function FileTreePanel({
     }
   };
 
+  const createEntry = async (name: string) => {
+    if (!createTarget || working) return;
+    setWorking(true);
+    try {
+      await onCreate(createTarget.path, name, createKind);
+      setCreateTarget(null);
+    } catch (error) {
+      onError(error);
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const directoryFor = (node: FileTreeNode): FileTreeNode => {
+    if (node.kind === "directory") return node;
+    const separator = node.path.lastIndexOf("/") >= 0 ? "/" : "\\";
+    const index = node.path.lastIndexOf(separator);
+    const path = index > 0 ? node.path.slice(0, index) : root?.path ?? node.path;
+    return { path, name: path, kind: "directory" };
+  };
+
+  const beginCreate = (node: FileTreeNode, kind: "file" | "directory") => {
+    setCreateTarget(directoryFor(node));
+    setCreateKind(kind);
+  };
+
   const relativePath = (path: string) => {
     const rootPath = root?.path.replace(/\\/g, "/");
     const target = path.replace(/\\/g, "/");
@@ -217,6 +257,11 @@ export function FileTreePanel({
               ref={listRef}
               className="min-h-0 flex-1 overflow-auto"
               onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+              onContextMenu={(event) => {
+                if ((event.target as Element).closest("[data-file-tree-row]")) return;
+                event.preventDefault();
+                setMenu({ node: root, x: event.clientX, y: event.clientY });
+              }}
             >
               <div
                 className="relative"
@@ -288,6 +333,8 @@ export function FileTreePanel({
           x={menu.x}
           y={menu.y}
           onClose={() => setMenu(null)}
+          onCreateFile={() => beginCreate(menu.node, "file")}
+          onCreateFolder={() => beginCreate(menu.node, "directory")}
           onRename={() => {
             setRenamePath(menu.node.path);
             setRenameName(menu.node.name);
@@ -296,7 +343,9 @@ export function FileTreePanel({
           onCopyPath={() => onCopyText(menu.node.path)}
           onCopyRelativePath={() => onCopyText(relativePath(menu.node.path))}
           onReveal={() => onReveal(menu.node.path)}
+          onRemoveRoot={onRemoveRoot}
           canModify={menu.node.path !== root?.path}
+          isRoot={menu.node.path === root?.path}
         />
       )}
       <FileTreeDeleteDialog
@@ -304,6 +353,15 @@ export function FileTreePanel({
         permanent={false}
         onConfirm={() => void moveToTrash()}
         onCancel={() => setDeleteNode(null)}
+      />
+      <FileTreeCreateDialog
+        directory={createTarget}
+        kind={createKind}
+        working={working}
+        onConfirm={(name) => void createEntry(name)}
+        onCancel={() => {
+          if (!working) setCreateTarget(null);
+        }}
       />
       <FileTreeDeleteDialog
         node={permanentDeleteNode}

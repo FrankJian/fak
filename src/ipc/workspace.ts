@@ -10,6 +10,17 @@ export interface WorkspaceEntry {
   kind: WorkspaceEntryKind;
 }
 
+export function createWorkspaceEntry(
+  root: string,
+  directory: string,
+  name: string,
+  kind: WorkspaceEntryKind,
+): Promise<WorkspaceEntry> {
+  return invoke<WorkspaceEntry>("create_workspace_entry", {
+    args: { root, directory, name, kind },
+  });
+}
+
 export interface WorkspaceIndexProgress {
   sessionId: string;
   indexedFiles: number;

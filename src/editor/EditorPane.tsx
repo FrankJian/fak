@@ -5,7 +5,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type RefObject,
 } from "react";
-import type { DocumentMeta } from "../ipc/documents";
+import type { ApplyResult, DocumentMeta } from "../ipc/documents";
 import type { SyncStatus } from "../ipc/editSync";
 import type { SearchMatch } from "../ipc/search";
 import { useTranslation } from "../i18n/useTranslation";
@@ -35,6 +35,7 @@ interface EditorPaneProps {
   initialViewportAnchor?: { line: number; topLine: number };
   initialFoldedLines?: readonly number[];
   onSyncStatusChange: (status: SyncStatus) => void;
+  onDocumentChange?: (result: ApplyResult) => void;
   /** 正文变化的通知，供备份调度使用（SPEC F1.6） */
   onEdited?: () => void;
   /** 双击行号切换书签（SPEC F7）。传 0 基行号 */
@@ -66,6 +67,7 @@ export function EditorPane({
   initialViewportAnchor,
   initialFoldedLines,
   onSyncStatusChange,
+  onDocumentChange,
   onEdited,
   onToggleBookmark,
   onCursorChange,
@@ -118,6 +120,7 @@ export function EditorPane({
     initialFoldedLines,
     appearance,
     onSyncStatusChange,
+    onDocumentChange,
     onEdited,
     onToggleBookmark,
     onCursorChange: noteCursor,

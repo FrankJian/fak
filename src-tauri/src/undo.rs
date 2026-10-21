@@ -163,12 +163,22 @@ impl UndoStack {
     ) -> bool {
         // 新的编辑让 redo 分支失效——这是所有编辑器的通行语义
         if !self.redo.is_empty() {
+            if self
+                .save_marker
+                .is_some_and(|marker| marker > self.undo.len())
+            {
+                self.save_marker = None;
+            }
             let dropped: usize = self.redo.iter().map(UndoStep::text_bytes).sum();
             self.total_bytes = self.total_bytes.saturating_sub(dropped);
             self.redo.clear();
         }
 
-        if self.try_coalesce(&undo_changes, &redo_changes, &selection_after, key, now) {
+        // 保存点必须是撤销步骤之间的边界。否则保存后的输入会并入保存前的
+        // 步骤，下一次撤销直接跨过磁盘上的版本。
+        if self.save_marker != Some(self.undo.len())
+            && self.try_coalesce(&undo_changes, &redo_changes, &selection_after, key, now)
+        {
             return true;
         }
 
@@ -219,7 +229,14 @@ impl UndoStack {
         let previous_end = previous_redo.from + previous_redo.insert.chars().count();
         let continuous = match key.kind {
             EditKind::Typing => incoming_redo.from == previous_end,
-            EditKind::Deleting => incoming_redo.to == previous_redo.from,
+            EditKind::Deleting => {
+                previous_redo.insert.is_empty()
+                    && incoming_redo.insert.is_empty()
+                    && previous_redo.from < previous_redo.to
+                    && incoming_redo.from < incoming_redo.to
+                    && (incoming_redo.to == previous_redo.from
+                        || incoming_redo.from == previous_redo.from)
+            }
             _ => false,
         };
         if !continuous {
@@ -279,18 +296,19 @@ fn merge_typing_step(
             last.undo[0].to = last.undo[0].from + last.redo[0].insert.chars().count();
         }
         EditKind::Deleting => {
-            // Backspace 是向左退，起点跟着往前走
-            let mut merged = redo_changes[0].insert.clone();
-            merged.push_str(&last.redo[0].insert);
-            last.redo[0].from = redo_changes[0].from;
-            last.redo[0].to = last.redo[0].from + merged.chars().count();
-            last.redo[0].insert = merged;
-
-            let mut restored = undo_changes[0].insert.clone();
-            restored.push_str(&last.undo[0].insert);
-            last.undo[0].from = undo_changes[0].from;
-            last.undo[0].to = last.undo[0].from;
-            last.undo[0].insert = restored;
+            if redo_changes[0].to == last.redo[0].from {
+                // Backspace 向左扩展；redo 坐标须覆盖原文中的整段删除区间。
+                last.redo[0].from = redo_changes[0].from;
+                let mut restored = undo_changes[0].insert.clone();
+                restored.push_str(&last.undo[0].insert);
+                last.undo[0].from = undo_changes[0].from;
+                last.undo[0].to = last.undo[0].from;
+                last.undo[0].insert = restored;
+            } else {
+                // Delete 保持光标不动，后续删除的字符在原文里向右延伸。
+                last.redo[0].to += redo_changes[0].to - redo_changes[0].from;
+                last.undo[0].insert.push_str(&undo_changes[0].insert);
+            }
         }
         _ => {}
     }
@@ -477,6 +495,39 @@ mod tests {
     }
 
     #[test]
+    fn saving_separates_adjacent_typing_from_the_previous_undo_step() {
+        let mut stack = fast_stack();
+        let start = Instant::now();
+        type_char(&mut stack, 0, "a", start);
+        stack.mark_saved();
+        type_char(&mut stack, 1, "b", start + Duration::from_millis(10));
+
+        assert_eq!(stack.depth(), 2);
+        assert!(stack.is_dirty());
+        assert_eq!(
+            stack.undo().expect("撤销保存后的输入").undo[0],
+            change(1, 2, "")
+        );
+        assert!(!stack.is_dirty());
+        assert_eq!(
+            stack.undo().expect("再撤销保存前的输入").undo[0],
+            change(0, 1, "")
+        );
+        assert!(stack.is_dirty());
+    }
+
+    #[test]
+    fn editing_after_undo_does_not_reuse_a_discarded_save_marker() {
+        let mut stack = fast_stack();
+        let start = Instant::now();
+        type_char(&mut stack, 0, "a", start);
+        stack.mark_saved();
+        stack.undo();
+        type_char(&mut stack, 0, "b", start + Duration::from_millis(900));
+        assert!(stack.is_dirty(), "新分支不能碰巧落在旧保存点的深度");
+    }
+
+    #[test]
     fn depth_limit_drops_the_oldest_step() {
         let mut stack = UndoStack::with_limits(Duration::from_millis(500), 3, 64 * 1024 * 1024);
         let start = Instant::now();
@@ -598,5 +649,30 @@ mod tests {
             change(0, 0, "abc"),
             "撤销要把三个字符一起放回"
         );
+        assert_eq!(step.redo[0], change(0, 3, ""), "重做要再次删掉三个字符");
+    }
+
+    #[test]
+    fn forward_delete_run_merges_into_one_reversible_step() {
+        let mut stack = fast_stack();
+        let start = Instant::now();
+        // 在 "abcd" 的 a 后连续按两次 Delete，依次删除 b 和 c。
+        for (index, ch) in ["b", "c"].iter().enumerate() {
+            stack.push_at(
+                vec![change(1, 1, ch)],
+                vec![change(1, 2, "")],
+                vec![],
+                vec![],
+                CoalesceKey {
+                    kind: EditKind::Deleting,
+                    line: 0,
+                },
+                start + Duration::from_millis(index as u64 * 10),
+            );
+        }
+        assert_eq!(stack.depth(), 1);
+        let step = stack.undo().expect("一步");
+        assert_eq!(step.undo[0], change(1, 1, "bc"));
+        assert_eq!(step.redo[0], change(1, 3, ""));
     }
 }

@@ -61,6 +61,7 @@ import Eye from "lucide-react/icons/eye";
 import EyeOff from "lucide-react/icons/eye-off";
 import FileIcon from "lucide-react/icons/file";
 import FileCode from "lucide-react/icons/file-code";
+import FileInput from "lucide-react/icons/file-input";
 import FileOutput from "lucide-react/icons/file-output";
 import FilePlus from "lucide-react/icons/file-plus";
 import FileSearch from "lucide-react/icons/file-search";
@@ -70,7 +71,9 @@ import FilterX from "lucide-react/icons/filter-x";
 import FoldHorizontal from "lucide-react/icons/fold-horizontal";
 import FoldVertical from "lucide-react/icons/fold-vertical";
 import Folder from "lucide-react/icons/folder";
+import FolderInput from "lucide-react/icons/folder-input";
 import FolderOpen from "lucide-react/icons/folder-open";
+import FolderPlus from "lucide-react/icons/folder-plus";
 import FolderSearch from "lucide-react/icons/folder-search";
 import FolderTree from "lucide-react/icons/folder-tree";
 import GripVertical from "lucide-react/icons/grip-vertical";
@@ -153,8 +156,9 @@ import ZoomOut from "lucide-react/icons/zoom-out";
 export const icons = {
   // —— 文件与文档
   newFile: FilePlus,
-  openFile: FolderOpen,
-  openFolder: FolderTree,
+  newFolder: FolderPlus,
+  openFile: FileInput,
+  openFolder: FolderInput,
   save: Save,
   saveAll: SaveAll,
   saveAs: FileOutput,

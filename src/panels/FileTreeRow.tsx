@@ -48,6 +48,7 @@ export function FileTreeRow({
 
   return (
     <div
+      data-file-tree-row
       className={`absolute inset-x-0 flex items-center ${
         current
           ? "border-l-2 border-[var(--accent)] bg-[var(--bg-active)]"

@@ -222,4 +222,43 @@ describe("useWorkspace 标签正文", () => {
 
     expect(calls).toEqual(["flush", "undo"]);
   });
+
+  it("连续撤销与重做在原编辑器恢复正文、选区和新的同步版本", async () => {
+    const document = { ...meta("d1", "notes.md"), lineCount: 3, documentVersion: 4 };
+    useDocumentStore.setState({
+      tabs: [{ meta: document, syncStatus: "idle", lastActiveAt: 1, path: "/work/notes.md", viewportAnchor: { line: 2, topLine: 1 }, locked: false, foldedLines: [] }],
+      activeId: document.documentId,
+    });
+    vi.mocked(undoDocument)
+      .mockResolvedValueOnce({ applied: true, documentVersion: 5, lineCount: 3, dirty: true, canUndo: true, canRedo: true, selection: { anchor: 13, head: 13 } })
+      .mockResolvedValueOnce({ applied: true, documentVersion: 6, lineCount: 2, dirty: false, canUndo: false, canRedo: true, selection: { anchor: 7, head: 7 } });
+    vi.mocked(redoDocument).mockResolvedValue({ applied: true, documentVersion: 7, lineCount: 3, dirty: true, canUndo: true, canRedo: true, selection: { anchor: 13, head: 13 } });
+    vi.mocked(readAllText)
+      .mockResolvedValueOnce("first\nsecond\nthird")
+      .mockResolvedValueOnce("first\nsecond\n")
+      .mockResolvedValueOnce("first\n")
+      .mockResolvedValueOnce("first\nsecond\n");
+    const applied: Array<[string, number, number]> = [];
+    const editor = {
+      flush: vi.fn().mockResolvedValue(undefined),
+      applyAuthoritativeText: (text: string, selection: { head: number } | null, version: number) => {
+        applied.push([text, selection?.head ?? -1, version]);
+      },
+    } as unknown as EditorHandle;
+    const { result } = renderHook(() => useWorkspace());
+    result.current.handleRef.current = editor;
+
+    await act(async () => {
+      await Promise.all([result.current.undo(), result.current.undo(), result.current.redo()]);
+    });
+
+    expect(applied).toEqual([
+      ["first\nsecond\n", 13, 5],
+      ["first\n", 7, 6],
+      ["first\nsecond\n", 13, 7],
+    ]);
+    expect(vi.mocked(readAllText).mock.calls.map((call) => call[1]))
+      .toEqual([3, 3, 2, 3]);
+    expect(useDocumentStore.getState().tabs[0].meta).toMatchObject({ documentVersion: 7, lineCount: 3, dirty: true });
+  });
 });

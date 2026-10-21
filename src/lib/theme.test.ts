@@ -6,6 +6,8 @@ describe('resolveTheme', () => {
     expect(resolveTheme('light', true, true)).toBe('light');
     expect(resolveTheme('dark', false, false)).toBe('dark');
     expect(resolveTheme('highContrast', false, false)).toBe('highContrast');
+    expect(resolveTheme('forestDark', false, false)).toBe('forestDark');
+    expect(resolveTheme('highContrastCyan', true, false)).toBe('highContrastCyan');
   });
 
   it('跟随系统时按 prefers-color-scheme 取浅深', () => {

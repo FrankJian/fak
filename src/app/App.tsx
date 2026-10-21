@@ -124,6 +124,7 @@ export function App() {
     tabs,
     activeId,
     setSyncStatus,
+    updateMeta,
     setViewportAnchor,
     setFoldedLines,
     toggleLocked,
@@ -166,6 +167,8 @@ export function App() {
   const [closingId, setClosingId] = useState<string | null>(null);
   /** 批量关闭遇到脏文档时，余下标签在当前确认完成后继续处理。 */
   const [closeQueue, setCloseQueue] = useState<string[]>([]);
+  const closeCompletionRef = useRef<(() => Promise<void>) | null>(null);
+  const removingWorkspaceRef = useRef(false);
   const [picker, setPicker] = useState<"encoding" | "lineEnding" | null>(null);
   /** ?????????? / ??? / ????SPEC F4.1? */
   const [findMode, setFindMode] = useState<"closed" | "find" | "replace">(
@@ -649,7 +652,11 @@ export function App() {
   );
 
   const closeMany = useCallback(
-    async (documentIds: string[]) => {
+    async (
+      documentIds: string[],
+      onComplete?: () => Promise<void>,
+    ) => {
+      if (onComplete) closeCompletionRef.current = onComplete;
       for (const [index, documentId] of documentIds.entries()) {
         const tab = tabs.find((item) => item.meta.documentId === documentId);
         if (!tab) continue;
@@ -661,6 +668,9 @@ export function App() {
         }
         await closeDocument(documentId);
       }
+      const complete = closeCompletionRef.current;
+      closeCompletionRef.current = null;
+      await complete?.();
     },
     [closeDocument, tabs, workspace],
   );
@@ -680,7 +690,40 @@ export function App() {
   const cancelClose = () => {
     setClosingId(null);
     setCloseQueue([]);
+    closeCompletionRef.current = null;
+    removingWorkspaceRef.current = false;
   };
+
+  const removeWorkspaceRoot = useCallback(() => {
+    if (removingWorkspaceRef.current) return;
+    removingWorkspaceRef.current = true;
+    const documentIds = useDocumentStore
+      .getState()
+      .tabs.map((tab) => tab.meta.documentId);
+    void closeMany(documentIds, async () => {
+      try {
+        session.cancelPendingRestore();
+        await fileTree.removeRoot();
+        await session.persist();
+      } finally {
+        removingWorkspaceRef.current = false;
+      }
+    });
+  }, [closeMany, fileTree, session]);
+
+  const priorTabCountRef = useRef(0);
+  useEffect(() => {
+    if (
+      priorTabCountRef.current > 0 &&
+      tabs.length === 0 &&
+      !removingWorkspaceRef.current
+    ) {
+      // 用户主动关闭最后一个标签后，仍在飞行中的会话恢复不能把旧标签放回来。
+      session.cancelPendingRestore();
+      void session.persist();
+    }
+    priorTabCountRef.current = tabs.length;
+  }, [session, tabs.length]);
 
   const dirtyTabs = useMemo(() => tabs.filter((tab) => tab.meta.dirty), [tabs]);
 
@@ -864,6 +907,7 @@ export function App() {
         toggleFileTree: () => setFileTreeOpen((open) => !open),
         refreshFileTree: () => void fileTree.refresh(),
         collapseFileTree: fileTree.collapseAll,
+        removeWorkspaceRoot,
         toggleBookmark: bookmarks.toggleAtCursor,
         nextBookmark: () => bookmarks.step(true),
         previousBookmark: () => bookmarks.step(false),
@@ -878,6 +922,9 @@ export function App() {
         openExternalTools: () => setToolPickerOpen(true),
         openWordCount: () => void openWordCount(),
         openSettings: (group = "general") => setSettingsGroup(group),
+        setTheme: (theme) => patchConfig({ theme }),
+        setDensity: (density) => patchConfig({ density }),
+        setLanguage: (language) => patchConfig({ language }),
         checkForUpdates: () => checkForUpdatesNow(),
         toggleMarkdownPreview,
         hasMermaidDiagram: () => markdownPreviewMode !== "hidden" && mermaidDiagramCount > 0,
@@ -927,11 +974,13 @@ export function App() {
     openWordCount,
     openFolder,
     fileTree,
+    removeWorkspaceRoot,
     toggleMarkdownPreview,
     markdownPreviewMode,
     mermaidDiagramCount,
     toggleQuickAccessBar,
     formatMarkdown,
+    patchConfig,
     textTools,
     shortcutOverrides,
     checkForUpdatesNow,
@@ -1112,11 +1161,13 @@ export function App() {
             onRefresh={() => void fileTree.refresh()}
             onCollapseAll={fileTree.collapseAll}
             onRename={fileTree.rename}
+            onCreate={fileTree.create}
             onMoveToTrash={fileTree.moveToTrash}
             onPermanentlyDelete={fileTree.permanentlyDelete}
             onCopyText={(text) => void copyToClipboard(text)}
             onReveal={(path) => void revealInFileManager(path)}
             onError={workspace.report}
+            onRemoveRoot={removeWorkspaceRoot}
             onClose={() => setFileTreeOpen(false)}
           />
         )}
@@ -1221,6 +1272,18 @@ export function App() {
                   onSyncStatusChange={(status) =>
                     setSyncStatus(activeTab.meta.documentId, status)
                   }
+                  onDocumentChange={(result) => {
+                    const current = useDocumentStore.getState().tabs.find(
+                      (tab) => tab.meta.documentId === activeTab.meta.documentId,
+                    )?.meta;
+                    if (current) updateMeta({
+                      ...current,
+                      documentVersion: result.documentVersion,
+                      dirty: result.dirty,
+                      lineCount: result.lineCount,
+                      mode: result.mode,
+                    });
+                  }}
                   onEdited={noteEdited}
                   onToggleBookmark={bookmarks.toggleAtLine}
                   onCursorChange={outline.noteCursor}

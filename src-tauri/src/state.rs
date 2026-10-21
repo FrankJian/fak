@@ -212,6 +212,7 @@ impl Document {
         self.saved_encoding = label;
         self.document_version += 1;
         self.saved_document_version = self.document_version;
+        self.undo = crate::undo::UndoStack::new();
     }
 
     /// 切换换行符会置脏（SPEC F1.3）。
@@ -404,10 +405,34 @@ mod tests {
         document.reopen_with_encoding(&bytes, EncodingLabel::Windows1252);
         assert_ne!(document.text(), "中文日志");
 
+        document.undo.push(
+            vec![Change {
+                from: 0,
+                to: 0,
+                insert: String::new(),
+            }],
+            vec![Change {
+                from: 0,
+                to: 0,
+                insert: String::new(),
+            }],
+            vec![],
+            vec![],
+            crate::undo::CoalesceKey {
+                kind: crate::undo::EditKind::Other,
+                line: 0,
+            },
+        );
+        assert!(document.undo.can_undo());
+
         // 用户从状态栏选「以 GBK 重新打开」，正文恢复
         document.reopen_with_encoding(&bytes, EncodingLabel::Gbk);
         assert_eq!(document.text(), "中文日志");
         assert!(!document.is_dirty(), "重新打开等于回到一个新的保存点");
+        assert!(
+            !document.undo.can_undo(),
+            "重新解码后旧坐标上的撤销历史不可继续使用"
+        );
         assert_eq!(document.encoding_confidence, Confidence::High);
     }
 

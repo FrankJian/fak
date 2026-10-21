@@ -1,6 +1,6 @@
 import type { Density, Theme } from '../store/appStore';
 
-export type ResolvedTheme = 'light' | 'dark' | 'highContrast';
+export type ResolvedTheme = Exclude<Theme, 'system'>;
 
 /** SPEC §6.11：跟随系统时若检测到 prefers-contrast: more，自动选用高对比度。 */
 export function resolveTheme(
@@ -17,5 +17,6 @@ export function applyAppearance(theme: ResolvedTheme, density: Density): void {
   const root = document.documentElement;
   root.dataset.theme = theme;
   root.dataset.density = density;
-  root.style.colorScheme = theme === 'light' ? 'light' : 'dark';
+  root.style.colorScheme =
+    theme === 'light' || theme === 'solarizedLight' ? 'light' : 'dark';
 }

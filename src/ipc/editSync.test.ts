@@ -58,6 +58,21 @@ describe('sortChangesDescending', () => {
 });
 
 describe('EditSyncQueue', () => {
+  it('starts at the opened document version and continues after an authoritative undo', async () => {
+    const { transport, sent } = makeTransport([
+      { ok: true, serverVersion: 8 },
+      { ok: true, serverVersion: 10 },
+    ]);
+    const queue = new EditSyncQueue({ docId: 'd', initialVersion: 7, transport, readText: () => '' });
+    queue.push(ChangeSet.of({ from: 0, insert: 'a' }, 0));
+    await queue.flush();
+    queue.acceptExternalVersion(9);
+    queue.push(ChangeSet.of({ from: 1, insert: 'b' }, 1));
+    await queue.flush();
+
+    expect(sent.map((batch) => batch.baseVersion)).toEqual([7, 9]);
+    expect(queue.getVersion()).toBe(10);
+  });
   it('16 ms 窗口内的编辑合并成一批', async () => {
     vi.useFakeTimers();
     const { transport, sent } = makeTransport([]);

@@ -9,7 +9,16 @@ import { DEFAULT_DIFF_OPTIONS, type DiffOptions } from "./diff";
 import { invoke, isTauriAvailable } from "./invoke";
 
 export type Language = "zh-CN" | "en-US";
-export type Theme = "system" | "light" | "dark" | "highContrast";
+export type Theme =
+  | "system"
+  | "light"
+  | "dark"
+  | "highContrast"
+  | "solarizedLight"
+  | "forestDark"
+  | "midnight"
+  | "highContrastCyan"
+  | "highContrastLime";
 export type Density = "compact" | "standard" | "comfortable";
 export type IndentMode = "tabs" | "spaces";
 export type CursorStyle = "line" | "block" | "underline";

@@ -50,9 +50,11 @@ export interface ApplyResult {
 export interface UndoResult {
   applied: boolean;
   documentVersion: number;
+  lineCount?: number;
   dirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  selection?: { anchor: number; head: number } | null;
 }
 
 /** 与 Rust 的 `EditOrigin` 一一对应；它决定撤销栈怎么合并这一步。 */
@@ -203,9 +205,11 @@ export function applyEdits(
   baseVersion: number,
   changes: Utf16Change[],
   origin: EditOrigin,
+  selectionBefore?: { anchor: number; head: number },
+  selectionAfter?: { anchor: number; head: number },
 ): Promise<ApplyResult> {
   return invoke<ApplyResult>("apply_edits", {
-    args: { documentId, baseVersion, changes, origin },
+    args: { documentId, baseVersion, changes, origin, selectionBefore, selectionAfter },
   });
 }
 
